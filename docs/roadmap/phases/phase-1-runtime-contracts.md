@@ -23,6 +23,7 @@ This phase is part of `0.1.0`, not a separate release.
 - execution model docs updated with runtime object semantics
 - event, tool, and policy contracts clarified in docs and schemas
 - roadmap updated to reflect the phased 0.1.0 approach
+- review checklist captured in [phase-1-checklist.md](./phase-1-checklist.md)
 
 ## Out Of Scope
 
