@@ -20,6 +20,7 @@ function createTestIO(cwd = "/repo") {
         },
       },
       cwd: () => cwd,
+      confirm: async () => true,
     },
     stdout,
     stderr,
@@ -38,6 +39,33 @@ describe("orb run command contract", () => {
 
     expect(parsed.sessionInput).toEqual({
       cwd: "/repo",
+      task: "fix failing tests",
+    });
+  });
+
+  it("ignores a leading double-dash passed through script runners", () => {
+    const parsed = parseCliArgs(["--", "run", "fix", "failing", "tests"], "/repo");
+
+    expect(parsed.command).toBe("run");
+
+    if (parsed.command !== "run") {
+      throw new Error("expected run command");
+    }
+
+    expect(parsed.sessionInput.task).toBe("fix failing tests");
+  });
+
+  it("parses an explicit --cwd override", () => {
+    const parsed = parseCliArgs(["--cwd", "benchmarks/failing-test-fix/repo", "run", "fix", "failing", "tests"], "/repo");
+
+    expect(parsed.command).toBe("run");
+
+    if (parsed.command !== "run") {
+      throw new Error("expected run command");
+    }
+
+    expect(parsed.sessionInput).toEqual({
+      cwd: "benchmarks/failing-test-fix/repo",
       task: "fix failing tests",
     });
   });
@@ -63,6 +91,7 @@ describe("orb run command contract", () => {
     expect(exitCode).toBe(0);
     expect(stderr).toEqual([]);
     expect(stdout.join("")).toBe(getCliUsage());
+    expect(stdout.join("")).toContain("benchmark:failing-test-fix");
   });
 
   it("accepts the run command at the contract level", async () => {
@@ -75,5 +104,34 @@ describe("orb run command contract", () => {
     expect(stdout.join("")).toContain("Session started:");
     expect(stdout.join("")).toContain("Plan: Planned task: summarize the next action");
     expect(stdout.join("")).toContain("Session complete:");
+  });
+
+  it("prints a clear runtime error when provider configuration is invalid", async () => {
+    const { io, stdout, stderr } = createTestIO();
+    const originalKey = process.env.OPENAI_API_KEY;
+    const originalModel = process.env.OPENAI_MODEL;
+
+    process.env.OPENAI_API_KEY = "test-key";
+    delete process.env.OPENAI_MODEL;
+
+    try {
+      const exitCode = await main(["run", "summarize", "the", "next", "action"], io);
+
+      expect(exitCode).toBe(1);
+      expect(stdout).toEqual([]);
+      expect(stderr.join("")).toContain("OPENAI_API_KEY and OPENAI_MODEL must be set together");
+    } finally {
+      if (originalKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = originalKey;
+      }
+
+      if (originalModel === undefined) {
+        delete process.env.OPENAI_MODEL;
+      } else {
+        process.env.OPENAI_MODEL = originalModel;
+      }
+    }
   });
 });

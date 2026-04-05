@@ -48,7 +48,7 @@ describe("orb run end-to-end", () => {
     const exitCode = await main(
       [
         "run",
-        'replace "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and run "node verify.mjs"',
+        'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
       ],
       io,
     );
