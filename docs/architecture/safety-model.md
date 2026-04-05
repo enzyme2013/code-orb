@@ -4,6 +4,20 @@
 
 The agent must be useful without becoming careless. Safety in Code Orb means making risky actions explicit, enforceable, and reviewable.
 
+## Terms
+
+Use these terms precisely:
+
+- `policy`: the rules used to evaluate an action
+- `permission decision`: the result of that evaluation
+- `approval response`: the user's response when confirmation is required
+
+In other words:
+
+- policy is the rule system
+- permission is the decision outcome for one request
+- approval response is the user's answer to a confirmation request
+
 ## Initial Policy Shape
 
 Commands and actions should fall into three buckets:
@@ -22,6 +36,21 @@ Initial examples for planning purposes:
 
 The exact allowlist and denylist should be implementation-backed later, but the categories should remain visible to the user.
 
+## V0.1 Minimum Model
+
+V0.1 does not need a large permission system. It does need a clear decision point.
+
+Minimum shape:
+
+```text
+Tool Request
+  -> Policy Evaluation
+  -> allow | confirm | deny
+  -> optional Approval Response
+```
+
+This gives Code Orb a consistent trust model without introducing a complex policy DSL too early.
+
 ## Filesystem Rules
 
 - operations should stay within the target repository unless explicitly allowed
@@ -36,6 +65,17 @@ Every significant action should be recoverable from logs or event artifacts:
 - what policy was applied
 - what actually ran
 - what changed
+
+## Boundary
+
+Policy evaluation should be a distinct runtime concern. It should not be hidden inside individual tool implementations or CLI prompts.
+
+Recommended separation:
+
+- `Policy Engine` evaluates the request
+- `Tool Executor` enforces the decision
+- `Shell` renders a confirmation prompt when needed
+- `Core Runtime` records the decision as an event
 
 ## Future Questions
 

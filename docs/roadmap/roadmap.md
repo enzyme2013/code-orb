@@ -11,10 +11,20 @@
 
 ### 0.1.0 Foundation
 
-- CLI shell scaffold
-- core package boundaries
-- basic event model
-- repository read, edit, and verify loop on fixture repositories
+- runtime contracts for session, turn, step, tools, policy, and events
+- a minimal runnable CLI loop on fixture repositories
+- repository read, edit, and verify path with a safety gate
+- clear shell/core/adapter boundaries that can support later shells and providers
+
+This milestone is expected to progress through two phases:
+
+- Phase 1: runtime contracts and architectural hardening
+- Phase 2: minimal end-to-end runnable loop
+
+Phase detail:
+
+- [phase-1-runtime-contracts.md](./phases/phase-1-runtime-contracts.md)
+- [phase-2-minimal-loop.md](./phases/phase-2-minimal-loop.md)
 
 Release detail: [releases/0.1.0.md](./releases/0.1.0.md)
 
