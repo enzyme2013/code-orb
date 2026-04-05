@@ -1,0 +1,10 @@
+{
+  "name": "@code-orb/core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@code-orb/schemas": "workspace:*",
+    "@code-orb/shared": "workspace:*"
+  }
+}

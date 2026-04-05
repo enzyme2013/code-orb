@@ -1,0 +1,11 @@
+{
+  "name": "code-orb",
+  "private": true,
+  "version": "0.0.0",
+  "description": "CLI-first coding agent with a future desktop path.",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
