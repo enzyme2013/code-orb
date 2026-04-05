@@ -2,6 +2,7 @@ import type { ModelProfile, StepRuntimeState, TurnReport, TurnRuntimeState } fro
 
 import type { ModelClient } from "../adapters/ports/model-client.js";
 import type { EventSink } from "../events/event-sink.js";
+import type { ApprovalResolver, PolicyEngine } from "../policy/policy-engine.js";
 import type { ToolExecutor } from "../tools/tool-executor.js";
 
 export interface AgentExecutionContext {
@@ -10,6 +11,8 @@ export interface AgentExecutionContext {
   eventSink: EventSink;
   modelClient: ModelClient;
   toolExecutor: ToolExecutor;
+  policyEngine: PolicyEngine;
+  approvalResolver: ApprovalResolver;
 }
 
 export interface AgentEngine {

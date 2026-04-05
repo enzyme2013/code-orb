@@ -1,9 +1,17 @@
+export { EchoModelClient } from "./adapters/mock/echo-model-client.js";
+export { OpenAIResponsesModelClient } from "./adapters/openai/openai-responses-model-client.js";
 export type { ModelClient } from "./adapters/ports/model-client.js";
 export { BasicAgentEngine } from "./engine/basic-agent-engine.js";
 export type { AgentEngine, AgentExecutionContext } from "./engine/agent-engine.js";
 export { MemoryEventSink } from "./events/memory-event-sink.js";
 export type { EventSink } from "./events/event-sink.js";
+export { AutoApproveResolver } from "./policy/auto-approve-resolver.js";
+export { AllowAllPolicyEngine } from "./policy/allow-all-policy-engine.js";
+export { MinimumPolicyEngine } from "./policy/minimum-policy-engine.js";
 export type { ApprovalResolver, PolicyEngine } from "./policy/policy-engine.js";
 export { BasicSessionRunner } from "./session/basic-session-runner.js";
 export type { SessionRunner, SessionRunnerContext } from "./session/session-runner.js";
+export { BasicToolExecutor } from "./tools/basic-tool-executor.js";
+export type { SearchMatch } from "./tools/builtin-tool-helpers.js";
+export { NoopToolExecutor } from "./tools/noop-tool-executor.js";
 export type { ToolExecutionContext, ToolExecutionOutcome, ToolExecutor } from "./tools/tool-executor.js";

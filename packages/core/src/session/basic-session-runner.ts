@@ -135,6 +135,8 @@ export class BasicSessionRunner implements SessionRunner {
       eventSink: context.eventSink,
       modelClient: context.modelClient,
       toolExecutor: context.toolExecutor,
+      policyEngine: context.policyEngine,
+      approvalResolver: context.approvalResolver,
     };
   }
 }
