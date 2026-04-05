@@ -4,6 +4,7 @@ import type { ToolDefinition, ToolExecutionResult } from "@code-orb/schemas";
 
 import { createRuntimeId, createTimestamp } from "../internal/runtime-utils.js";
 import {
+  BuiltinToolError,
   listRepositoryFiles,
   readRepositoryFile,
   replaceInRepositoryFile,
@@ -213,8 +214,9 @@ export class BasicToolExecutor implements ToolExecutor {
           backend: "builtin",
         },
         error: {
-          code: "tool_execution_failed",
+          code: error instanceof BuiltinToolError ? error.code : "tool_execution_failed",
           message: error instanceof Error ? error.message : "Unknown tool execution failure",
+          details: error instanceof BuiltinToolError ? error.details : undefined,
         },
       };
 

@@ -35,10 +35,10 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("orb run end-to-end", () => {
-  it("can inspect, edit, verify, and report on a fixture repository", async () => {
-    const fixtureRoot = resolve("tests/fixtures/replace-string-repo");
-    const tempRoot = await mkdtemp(join(tmpdir(), "code-orb-fixture-"));
+describe("orb run verification failure handling", () => {
+  it("reports a failed turn when verification still fails after the edit succeeds", async () => {
+    const fixtureRoot = resolve("tests/fixtures/replace-string-verify-fails-repo");
+    const tempRoot = await mkdtemp(join(tmpdir(), "code-orb-verify-fails-"));
     tempDirs.push(tempRoot);
 
     await cp(fixtureRoot, tempRoot, { recursive: true });
@@ -54,21 +54,19 @@ describe("orb run end-to-end", () => {
     );
 
     const updatedReadme = await readFile(join(tempRoot, "README.md"), "utf8");
+    const output = stdout.join("");
 
     expect(exitCode).toBe(0);
     expect(stderr).toEqual([]);
     expect(updatedReadme).toContain("Hello, Code Orb!");
-
-    const output = stdout.join("");
-    expect(output).toContain("Session started:");
-    expect(output).toContain("Tool started: search_text");
     expect(output).toContain("Tool started: apply_patch");
     expect(output).toContain("Verification started: node verify.mjs");
-    expect(output).toContain("Validation passed: node verify.mjs");
-    expect(output).toContain("Turn status: completed");
+    expect(output).toContain("Verification failed: node verify.mjs");
+    expect(output).toContain("Validation failed: node verify.mjs");
+    expect(output).toContain("Turn complete: Updated README.md, but verification still failed.");
+    expect(output).toContain("Turn status: failed");
     expect(output).toContain("Changed: README.md");
-    expect(output).toContain("Risks: none");
-    expect(output).toContain("Session complete:");
+    expect(output).toContain("Risk: Verification failed after the edit was applied.");
     expect(output).toContain("Session outcome: completed");
   });
 });

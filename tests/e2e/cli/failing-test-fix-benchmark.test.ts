@@ -63,7 +63,9 @@ describe("failing-test-fix benchmark", () => {
     expect(updatedChunk).toContain("index < items.length");
     expect(output).toContain("Verification failed: node verify.mjs");
     expect(output).toContain("Validation passed: node verify.mjs");
+    expect(output).toContain("Turn status: completed");
     expect(output).toContain("Changed: src/chunk.ts");
     expect(output).toContain("Turn complete: Fixed chunk so it preserves the final partial chunk before verification rerun");
+    expect(output).toContain("Session outcome: completed");
   }, 15000);
 });

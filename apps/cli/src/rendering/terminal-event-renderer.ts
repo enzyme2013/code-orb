@@ -45,6 +45,7 @@ export class TerminalEventRenderer {
       case "turn.completed":
         return [
           `Turn complete: ${event.payload.report.summary}\n`,
+          `Turn status: ${event.payload.report.outcome}\n`,
           ...(event.payload.report.filesChanged?.map((path) => `Changed: ${path}\n`) ?? []),
           ...(event.payload.report.validations?.map(
             (validation) => `Validation ${validation.status}: ${validation.name}\n`,
@@ -54,7 +55,7 @@ export class TerminalEventRenderer {
             : "Risks: none\n",
         ].join("");
       case "session.completed":
-        return `Session complete: ${event.payload.report.summary}\n`;
+        return `Session complete: ${event.payload.report.summary}\nSession outcome: ${event.payload.report.outcome}\n`;
       case "error.raised":
         return `Error: ${event.payload.message}\n`;
       default:

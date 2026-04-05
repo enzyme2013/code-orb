@@ -7,6 +7,17 @@ export interface SearchMatch {
   preview: string;
 }
 
+export class BuiltinToolError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "BuiltinToolError";
+  }
+}
+
 const DEFAULT_IGNORES = new Set([".git", "node_modules", "dist", "coverage"]);
 
 export function resolveRepoPath(cwd: string, targetPath: string): string {
@@ -52,7 +63,9 @@ export async function readRepositoryFile(cwd: string, targetPath: string): Promi
   const absolutePath = resolveRepoPath(cwd, targetPath);
 
   if (!isPathWithinCwd(cwd, absolutePath)) {
-    throw new Error(`Path is outside the repository: ${targetPath}`);
+    throw new BuiltinToolError(`Path is outside the repository: ${targetPath}`, "path_outside_repo", {
+      path: targetPath,
+    });
   }
 
   return readFile(absolutePath, "utf8");
@@ -96,13 +109,18 @@ export async function replaceInRepositoryFile(
   const absolutePath = resolveRepoPath(cwd, targetPath);
 
   if (!isPathWithinCwd(cwd, absolutePath)) {
-    throw new Error(`Path is outside the repository: ${targetPath}`);
+    throw new BuiltinToolError(`Path is outside the repository: ${targetPath}`, "path_outside_repo", {
+      path: targetPath,
+    });
   }
 
   const content = await readFile(absolutePath, "utf8");
 
   if (!content.includes(searchText)) {
-    throw new Error(`Search text not found in ${targetPath}`);
+    throw new BuiltinToolError(`Search text not found in ${targetPath}`, "edit_target_not_found", {
+      path: targetPath,
+      searchText,
+    });
   }
 
   const updated = content.replace(searchText, replaceText);

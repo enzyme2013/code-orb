@@ -3,6 +3,7 @@ import type {
   StepKind,
   StepRuntimeState,
   ToolCallRequest,
+  ToolExecutionResult,
   TurnPlan,
   TurnReport,
   TurnRuntimeState,
@@ -42,19 +43,20 @@ export class BasicAgentEngine implements AgentEngine {
     const validations = execution.validation ? [execution.validation] : undefined;
     const filesChanged = execution.changedFile ? [execution.changedFile] : undefined;
     const risks =
-      execution.validation?.status === "failed"
+      execution.risks ??
+      (execution.validation?.status === "failed"
         ? ["Verification command failed."]
         : execution.validation
           ? []
-          : ["No verification command was run."];
+          : ["No verification command was run."]);
 
-    turn.status = "completed";
+    turn.status = execution.outcome === "blocked" ? "blocked" : execution.outcome === "failed" ? "failed" : "completed";
     turn.endedAt = createTimestamp();
 
     return {
       sessionId: turn.sessionId,
       turnId: turn.id,
-      outcome: "completed",
+      outcome: execution.outcome ?? "completed",
       summary: execution.summary ?? plan.summary,
       filesChanged,
       validations,
@@ -140,6 +142,8 @@ export class BasicAgentEngine implements AgentEngine {
     summary?: string;
     changedFile?: string;
     validation?: ValidationResult;
+    outcome?: TurnReport["outcome"];
+    risks?: string[];
   }> {
     const parsed = parseReplaceAndVerifyTask(turn.input.content);
 
@@ -178,7 +182,7 @@ export class BasicAgentEngine implements AgentEngine {
     this.completeStep(turn, inspectStep.id);
 
     const editStep = await this.startStep(turn, "tool_use", context);
-    await this.executeTool(
+    const editResult = await this.executeToolResult(
       turn,
       editStep,
       context,
@@ -190,6 +194,16 @@ export class BasicAgentEngine implements AgentEngine {
       },
     );
     this.completeStep(turn, editStep.id);
+
+    const editFailure = classifyToolFailure("apply_patch", editResult);
+    if (editFailure) {
+      return {
+        summary: editFailure.summary,
+        changedFile: targetMatch.path,
+        outcome: editFailure.outcome,
+        risks: editFailure.risks,
+      };
+    }
 
     if (!parsed.verifyCommand) {
       return {
@@ -251,6 +265,16 @@ export class BasicAgentEngine implements AgentEngine {
 
     this.completeStep(turn, verifyStep.id);
 
+    if (validation.status === "failed") {
+      return {
+        summary: `Updated ${targetMatch.path}, but verification still failed.`,
+        changedFile: targetMatch.path,
+        validation,
+        outcome: "failed",
+        risks: ["Verification failed after the edit was applied."],
+      };
+    }
+
     return {
       summary: `Updated ${targetMatch.path} and ran verification`,
       changedFile: targetMatch.path,
@@ -262,10 +286,12 @@ export class BasicAgentEngine implements AgentEngine {
     turn: TurnRuntimeState,
     context: AgentExecutionContext,
   ): Promise<
-    | {
+      | {
         summary?: string;
         changedFile?: string;
         validation?: ValidationResult;
+        outcome?: TurnReport["outcome"];
+        risks?: string[];
       }
     | undefined
   > {
@@ -337,12 +363,23 @@ export class BasicAgentEngine implements AgentEngine {
       attemptedFixes.add(fixKey);
 
       const editStep = await this.startStep(turn, "tool_use", context);
-      await this.executeTool(turn, editStep, context, "apply_patch", {
+      const editResult = await this.executeToolResult(turn, editStep, context, "apply_patch", {
         path: diagnosis.sourcePath,
         searchText: proposedFix.searchText,
         replaceText: proposedFix.replaceText,
       });
       this.completeStep(turn, editStep.id);
+
+      const editFailure = classifyToolFailure("apply_patch", editResult);
+      if (editFailure) {
+        return {
+          summary: `${proposedFix.summary} could not be applied: ${editFailure.reason}`,
+          changedFile: diagnosis.sourcePath,
+          validation: latestVerification.validation,
+          outcome: editFailure.outcome,
+          risks: editFailure.risks,
+        };
+      }
 
       changedFile = diagnosis.sourcePath;
       lastSummary = proposedFix.summary;
@@ -373,6 +410,22 @@ export class BasicAgentEngine implements AgentEngine {
     toolName: string,
     input: Record<string, unknown>,
   ) {
+    const result = await this.executeToolResult(turn, step, context, toolName, input);
+
+    if (result.status === "error" || result.status === "denied") {
+      throw new Error(result.error?.message ?? `Tool failed: ${toolName}`);
+    }
+
+    return result;
+  }
+
+  private async executeToolResult(
+    turn: TurnRuntimeState,
+    step: StepRuntimeState,
+    context: AgentExecutionContext,
+    toolName: string,
+    input: Record<string, unknown>,
+  ): Promise<ToolExecutionResult> {
     const request: ToolCallRequest = {
       id: createRuntimeId("call"),
       sessionId: turn.sessionId,
@@ -391,10 +444,6 @@ export class BasicAgentEngine implements AgentEngine {
       policyEngine: context.policyEngine,
       approvalResolver: context.approvalResolver,
     });
-
-    if (outcome.result.status === "error" || outcome.result.status === "denied") {
-      throw new Error(outcome.result.error?.message ?? `Tool failed: ${toolName}`);
-    }
 
     return outcome.result;
   }
@@ -575,6 +624,53 @@ function proposeImplementationFix(
       searchText: "for (let index = 0; index + size <= items.length; index += size) {",
       replaceText: "for (let index = 0; index < items.length; index += size) {",
       summary: "Fixed chunk so it preserves the final partial chunk before verification rerun",
+    };
+  }
+
+  return null;
+}
+
+function classifyToolFailure(
+  toolName: string,
+  result: ToolExecutionResult,
+): { summary: string; reason: string; outcome: TurnReport["outcome"]; risks: string[] } | null {
+  if (result.status === "success") {
+    return null;
+  }
+
+  if (result.status === "denied") {
+    return {
+      summary: `${toolName} was blocked because approval was denied.`,
+      reason: "approval was denied",
+      outcome: "blocked",
+      risks: ["Mutating edit was blocked by approval denial."],
+    };
+  }
+
+  if (result.error?.code === "edit_target_not_found") {
+    return {
+      summary: `Could not apply ${toolName} because the expected edit target was not found.`,
+      reason: "the expected edit target was not found",
+      outcome: "failed",
+      risks: ["The requested edit could not be applied because the target text no longer matched the file."],
+    };
+  }
+
+  if (result.error?.code === "path_outside_repo") {
+    return {
+      summary: `${toolName} was blocked because the target path was outside the repository.`,
+      reason: "the target path was outside the repository",
+      outcome: "blocked",
+      risks: ["The requested edit targeted a path outside the active repository."],
+    };
+  }
+
+  if (result.status === "error") {
+    return {
+      summary: `${toolName} failed before verification could continue.`,
+      reason: result.error?.message ?? "the edit tool failed",
+      outcome: "failed",
+      risks: [result.error?.message ?? "The edit tool failed before verification could continue."],
     };
   }
 

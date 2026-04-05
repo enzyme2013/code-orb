@@ -8,6 +8,7 @@
     "build": "pnpm exec tsc --outDir dist",
     "cli:run": "node --import tsx apps/cli/src/main.ts",
     "benchmark:failing-test-fix": "CODE_ORB_AUTO_APPROVE=1 node --import tsx scripts/run-failing-test-fix-benchmark.ts",
+    "benchmark:verification-still-fails": "CODE_ORB_AUTO_APPROVE=1 node --import tsx scripts/run-verification-still-fails-benchmark.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",

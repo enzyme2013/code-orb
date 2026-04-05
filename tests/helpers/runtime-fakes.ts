@@ -6,6 +6,7 @@ import type {
   PermissionDecision,
   PolicyContext,
   ToolCallRequest,
+  ToolExecutionResult,
   ToolExecutionOutcome,
 } from "@code-orb/schemas";
 import type {
@@ -96,6 +97,30 @@ export class NoopToolExecutor implements ToolExecutor {
           finishedAt: new Date().toISOString(),
         },
       },
+    };
+  }
+}
+
+export class ScriptedToolExecutor implements ToolExecutor {
+  constructor(
+    private readonly handler: (request: ToolCallRequest, context: ToolExecutionContext) => Promise<ToolExecutionResult>,
+  ) {}
+
+  buildPolicyContext(_request: ToolCallRequest, context: ToolExecutionContext): PolicyContext {
+    return {
+      sessionId: "ses_fake",
+      turnId: "turn_fake",
+      cwd: context.cwd,
+    };
+  }
+
+  async execute(request: ToolCallRequest, context: ToolExecutionContext): Promise<ToolExecutionOutcome> {
+    return {
+      decision: {
+        type: "allow",
+        reason: "scripted tool executor",
+      },
+      result: await this.handler(request, context),
     };
   }
 }
