@@ -8,6 +8,10 @@ Use it for:
 - notes derived from reviewing other coding agents, tools, or projects
 - analysis artifacts produced by coding agents during design exploration
 
+Current examples:
+
+- [agent-analysis/codex-project-scope-permissions.md](./agent-analysis/codex-project-scope-permissions.md)
+
 Do not use this directory as the primary home for product scope, architecture rules, ADRs, or roadmap commitments. If a reference here leads to a project decision, update the authoritative document under `docs/product/`, `docs/architecture/`, `docs/adr/`, or `docs/roadmap/`.
 
 ## Suggested Structure

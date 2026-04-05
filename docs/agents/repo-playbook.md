@@ -24,3 +24,9 @@ A useful change report should state:
 - why the chosen approach fits the current architecture
 - what was validated
 - what remains unvalidated
+
+## Path Hygiene
+
+- prefer repository-relative paths in docs, templates, and examples
+- avoid committing local absolute paths unless the task specifically requires them
+- if a local path appears in generated notes or copied output, normalize it before committing

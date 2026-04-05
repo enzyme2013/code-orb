@@ -65,6 +65,8 @@ This order matters because implementation should reflect established boundaries 
 - `docs/roadmap/` defines version sequencing and milestone scope.
 - `docs/engineering/` covers operational practices such as testing and release work.
 - `docs/reference/` stores supporting material such as external references and coding-agent analysis notes.
+- use repository-relative paths in markdown links and examples unless an absolute path is explicitly required for the task.
+- do not commit machine-specific absolute paths, usernames, home directories, or workspace locations in docs or templates.
 
 Do not copy large chunks of one document into another. Link instead.
 
