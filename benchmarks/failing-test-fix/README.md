@@ -24,4 +24,4 @@ From the repository root:
 pnpm run benchmark:failing-test-fix
 ```
 
-This command builds Code Orb, changes into the benchmark repo, and runs the benchmark-oriented task prompt.
+This command copies the benchmark repo into a temporary workspace, runs the benchmark-oriented task prompt there, and leaves the source benchmark repo unchanged.

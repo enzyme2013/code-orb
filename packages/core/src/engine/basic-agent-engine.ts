@@ -569,10 +569,10 @@ function proposeImplementationFix(
   if (
     diagnosis.symbolName === "chunk" &&
     testContent.includes("final partial chunk") &&
-    sourceContent.includes("index + size < items.length")
+    sourceContent.includes("index + size <= items.length")
   ) {
     return {
-      searchText: "for (let index = 0; index + size < items.length; index += size) {",
+      searchText: "for (let index = 0; index + size <= items.length; index += size) {",
       replaceText: "for (let index = 0; index < items.length; index += size) {",
       summary: "Fixed chunk so it preserves the final partial chunk before verification rerun",
     };

@@ -7,7 +7,7 @@
   "scripts": {
     "build": "pnpm exec tsc --outDir dist",
     "cli:run": "node --import tsx apps/cli/src/main.ts",
-    "benchmark:failing-test-fix": "CODE_ORB_AUTO_APPROVE=1 pnpm run cli:run -- --cwd benchmarks/failing-test-fix/repo run \"Fix the failing test without changing the intended behavior. Start by running node verify.mjs, then inspect the failing code, make the smallest implementation fix, rerun node verify.mjs, and report the result.\"",
+    "benchmark:failing-test-fix": "CODE_ORB_AUTO_APPROVE=1 node --import tsx scripts/run-failing-test-fix-benchmark.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
