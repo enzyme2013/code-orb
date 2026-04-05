@@ -9,6 +9,7 @@ export { AutoApproveResolver } from "./policy/auto-approve-resolver.js";
 export { AllowAllPolicyEngine } from "./policy/allow-all-policy-engine.js";
 export { MinimumPolicyEngine } from "./policy/minimum-policy-engine.js";
 export type { ApprovalResolver, PolicyEngine } from "./policy/policy-engine.js";
+export { loadPromptAsset } from "./prompts/prompt-loader.js";
 export { BasicSessionRunner } from "./session/basic-session-runner.js";
 export type { SessionRunner, SessionRunnerContext } from "./session/session-runner.js";
 export { BasicToolExecutor } from "./tools/basic-tool-executor.js";
