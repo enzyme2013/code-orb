@@ -1,5 +1,6 @@
 import type {
   SessionInput,
+  SessionOutcome,
   SessionReport,
   SessionRuntimeState,
   TurnInput,
@@ -84,12 +85,13 @@ export class BasicSessionRunner implements SessionRunner {
         },
       });
 
-      session.status = "completed";
+      const sessionOutcome = deriveSessionOutcome(report.outcome);
+      session.status = sessionOutcome === "failed" ? "failed" : sessionOutcome === "cancelled" ? "cancelled" : "completed";
       session.endedAt = createTimestamp();
 
       const sessionReport: SessionReport = {
         sessionId: session.id,
-        outcome: "completed",
+        outcome: sessionOutcome,
         summary: report.summary,
         turnReports: [report],
         startedAt: session.startedAt,
@@ -139,4 +141,16 @@ export class BasicSessionRunner implements SessionRunner {
       approvalResolver: context.approvalResolver,
     };
   }
+}
+
+function deriveSessionOutcome(turnOutcome: SessionReport["turnReports"][number]["outcome"]): SessionOutcome {
+  if (turnOutcome === "failed") {
+    return "failed";
+  }
+
+  if (turnOutcome === "blocked") {
+    return "cancelled";
+  }
+
+  return "completed";
 }

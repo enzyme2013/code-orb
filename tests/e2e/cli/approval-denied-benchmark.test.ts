@@ -22,6 +22,7 @@ function createTestIO(cwd: string) {
         },
       },
       cwd: () => cwd,
+      confirm: async () => false,
     },
     stdout,
     stderr,
@@ -34,15 +35,15 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("verification-still-fails benchmark", () => {
-  it("reports a failed verification outcome after applying the requested edit", async () => {
+describe("approval-denied benchmark", () => {
+  it("reports a blocked edit and cancelled session when approval is rejected", async () => {
     const tempParent = resolve(".tmp-benchmarks");
     await mkdir(tempParent, { recursive: true });
 
-    const tempRoot = await mkdtemp(join(tempParent, "verification-still-fails-"));
+    const tempRoot = await mkdtemp(join(tempParent, "approval-denied-"));
     tempDirs.push(tempRoot);
 
-    const benchmarkRoot = resolve("benchmarks/verification-still-fails/repo");
+    const benchmarkRoot = resolve("benchmarks/approval-denied/repo");
     await cp(benchmarkRoot, tempRoot, { recursive: true });
 
     const { io, stdout, stderr } = createTestIO(tempRoot);
@@ -55,17 +56,17 @@ describe("verification-still-fails benchmark", () => {
       io,
     );
 
-    const updatedReadme = await readFile(join(tempRoot, "README.md"), "utf8");
+    const readme = await readFile(join(tempRoot, "README.md"), "utf8");
     const output = stdout.join("");
 
     expect(exitCode).toBe(0);
     expect(stderr).toEqual([]);
-    expect(updatedReadme).toContain("Hello, Code Orb!");
-    expect(output).toContain("Verification failed: node verify.mjs");
-    expect(output).toContain("Validation failed: node verify.mjs");
-    expect(output).toContain("Turn status: failed");
-    expect(output).toContain("Changed: README.md");
-    expect(output).toContain("Turn complete: Updated README.md, but verification still failed.");
-    expect(output).toContain("Session outcome: failed");
+    expect(readme).toContain("__CODE_ORB_PLACEHOLDER__");
+    expect(readme).not.toContain("Hello, Code Orb!");
+    expect(output).toContain("Tool denied: apply_patch (approval rejected)");
+    expect(output).toContain("Turn complete: apply_patch was blocked because approval was denied.");
+    expect(output).toContain("Turn status: blocked");
+    expect(output).toContain("Session outcome: cancelled");
+    expect(output).not.toContain("Verification started: node verify.mjs");
   });
 });

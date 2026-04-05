@@ -24,6 +24,10 @@ export const nodeCliIO: CliIO = {
       return true;
     }
 
+    if (process.env.CODE_ORB_BENCHMARK_REJECT_APPROVAL === "1") {
+      return false;
+    }
+
     if (!stdin.isTTY || !stdout.isTTY) {
       throw new Error(
         "Mutating actions require interactive approval. Re-run in a TTY or set CODE_ORB_AUTO_APPROVE=1.",

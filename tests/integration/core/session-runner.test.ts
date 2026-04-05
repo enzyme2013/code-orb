@@ -160,7 +160,7 @@ describe("BasicSessionRunner", () => {
     );
 
     expect(callCount).toBe(3);
-    expect(report.outcome).toBe("completed");
+    expect(report.outcome).toBe("failed");
     expect(report.turnReports[0]?.outcome).toBe("failed");
     expect(report.turnReports[0]?.summary).toBe(
       "Could not apply apply_patch because the expected edit target was not found.",

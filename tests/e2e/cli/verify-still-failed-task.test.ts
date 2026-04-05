@@ -67,6 +67,6 @@ describe("orb run verification failure handling", () => {
     expect(output).toContain("Turn status: failed");
     expect(output).toContain("Changed: README.md");
     expect(output).toContain("Risk: Verification failed after the edit was applied.");
-    expect(output).toContain("Session outcome: completed");
+    expect(output).toContain("Session outcome: failed");
   });
 });
