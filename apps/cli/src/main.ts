@@ -1,4 +1,5 @@
 import { getCliUsage, parseCliArgs } from "./commands/run.js";
+import { createCliRuntime } from "./runtime/create-cli-runtime.js";
 
 export interface CliIO {
   readonly stdout: {
@@ -29,9 +30,14 @@ export async function main(args: string[] = process.argv.slice(2), io: CliIO = n
     return 1;
   }
 
-  io.stdout.write(`Accepted run command for task: ${parsed.sessionInput.task}\n`);
-  io.stdout.write("Phase 1 CLI contract established; runtime wiring continues in Phase 2.\n");
-  return 0;
+  const runtime = createCliRuntime(io);
+
+  try {
+    await runtime.runner.run(parsed.sessionInput, runtime.context);
+    return 0;
+  } catch {
+    return 1;
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

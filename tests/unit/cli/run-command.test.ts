@@ -72,6 +72,8 @@ describe("orb run command contract", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr).toEqual([]);
-    expect(stdout.join("")).toContain("Accepted run command");
+    expect(stdout.join("")).toContain("Session started:");
+    expect(stdout.join("")).toContain("Plan: Planned task: summarize the next action");
+    expect(stdout.join("")).toContain("Session complete:");
   });
 });
