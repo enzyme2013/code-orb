@@ -18,6 +18,26 @@ The repository is currently in a docs-first bootstrap phase. The immediate goal 
 - [docs/architecture/overview.md](./docs/architecture/overview.md)
 - [docs/roadmap/roadmap.md](./docs/roadmap/roadmap.md)
 
+## Running
+
+Run the CLI from the repository root:
+
+```bash
+pnpm run cli:run -- run "<task>"
+```
+
+Run the primary benchmark path:
+
+```bash
+pnpm run benchmark:failing-test-fix
+```
+
+Provider configuration:
+
+- set both `OPENAI_API_KEY` and `OPENAI_MODEL` to use a real provider
+- set `OPENAI_BASE_URL` only when targeting an OpenAI-compatible endpoint
+- if no provider variables are set, Code Orb falls back to the mock model client
+
 ## Repository Layout
 
 ```text
@@ -26,6 +46,7 @@ packages/     Shared runtime packages used by multiple apps.
 docs/         Product, architecture, ADR, roadmap, engineering, and reference docs.
 prompts/      Prompt assets managed as first-class project artifacts.
 tests/        Unit, integration, end-to-end, and fixture repositories.
+benchmarks/   Benchmark tasks and evaluation repositories for milestone validation.
 scripts/      Automation scripts that support development and release work.
 ```
 

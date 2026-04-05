@@ -62,6 +62,17 @@ Shared Utility Layer
 
 This is a logical design, not a claim that each layer must become its own package on day one. In early versions, adapter implementations may live under `packages/core`, but they should still be treated as a separate responsibility boundary.
 
+## Benchmark Repositories
+
+Benchmark tasks and their associated evaluation repositories live under `benchmarks/`.
+
+They are intentionally separate from `tests/fixtures/`:
+
+- `tests/fixtures/` are test-support repositories used by automated tests
+- `benchmarks/` are milestone and capability evaluation targets
+
+This keeps product-evaluation tasks distinct from narrow test fixtures.
+
 ## Dependency Direction
 
 ```text

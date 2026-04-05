@@ -103,6 +103,7 @@ The intended repository shape is:
 ```text
 apps/
   cli/
+benchmarks/
 packages/
   core/
   schemas/

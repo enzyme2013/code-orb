@@ -16,6 +16,10 @@
 - repository read, edit, and verify path with a safety gate
 - clear shell/core/adapter boundaries that can support later shells and providers
 
+Current status:
+
+- released on 2026-04-05
+
 This milestone is expected to progress through two phases:
 
 - Phase 1: runtime contracts and architectural hardening
@@ -28,11 +32,21 @@ Phase detail:
 
 Release detail: [releases/0.1.0.md](./releases/0.1.0.md)
 
-### 0.2.0 Context
+### 0.2.0 Runnable Alpha
 
-- better repository understanding
-- richer file and search tooling
-- improved planning inputs
+- make the CLI runnable and understandable for real local-repository usage
+- broaden task handling beyond the current narrow replacement-oriented MVP path
+- improve repository understanding, planning, and tool selection
+- strengthen approval UX, reporting, and fixture coverage for real alpha usage
+- use `benchmarks/failing-test-fix/` as the primary validation target
+
+Current status:
+
+- repository milestone achieved in the working tree
+- release/version decision still pending
+
+Release detail: [releases/0.2.0.md](./releases/0.2.0.md)
+- checklist: [releases/0.2.0-checklist.md](./releases/0.2.0-checklist.md)
 
 ### 0.3.0 Edit And Verify
 
