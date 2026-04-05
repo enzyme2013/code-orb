@@ -1,3 +1,6 @@
+import { createInterface } from "node:readline/promises";
+import { stdin, stdout } from "node:process";
+
 import { getCliUsage, parseCliArgs } from "./commands/run.js";
 import { createCliRuntime } from "./runtime/create-cli-runtime.js";
 
@@ -9,12 +12,32 @@ export interface CliIO {
     write(message: string): void;
   };
   cwd(): string;
+  confirm?(message: string): Promise<boolean>;
 }
 
 export const nodeCliIO: CliIO = {
   stdout: process.stdout,
   stderr: process.stderr,
   cwd: () => process.cwd(),
+  confirm: async (message: string) => {
+    if (process.env.CODE_ORB_AUTO_APPROVE === "1") {
+      return true;
+    }
+
+    if (!stdin.isTTY || !stdout.isTTY) {
+      throw new Error(
+        "Mutating actions require interactive approval. Re-run in a TTY or set CODE_ORB_AUTO_APPROVE=1.",
+      );
+    }
+
+    const rl = createInterface({ input: stdin, output: stdout });
+    try {
+      const answer = await rl.question(`${message} [y/N] `);
+      return /^y(es)?$/i.test(answer.trim());
+    } finally {
+      rl.close();
+    }
+  },
 };
 
 export async function main(args: string[] = process.argv.slice(2), io: CliIO = nodeCliIO): Promise<number> {
@@ -30,12 +53,12 @@ export async function main(args: string[] = process.argv.slice(2), io: CliIO = n
     return 1;
   }
 
-  const runtime = createCliRuntime(io);
-
   try {
+    const runtime = createCliRuntime(io);
     await runtime.runner.run(parsed.sessionInput, runtime.context);
     return 0;
-  } catch {
+  } catch (error) {
+    io.stderr.write(`Code Orb failed: ${error instanceof Error ? error.message : "Unknown error"}\n`);
     return 1;
   }
 }

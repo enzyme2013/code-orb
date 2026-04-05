@@ -1,10 +1,8 @@
 import {
-  AutoApproveResolver,
   BasicAgentEngine,
   BasicSessionRunner,
   BasicToolExecutor,
   MinimumPolicyEngine,
-  NoopToolExecutor,
   type EventSink,
   type SessionRunner,
   type SessionRunnerContext,
@@ -13,6 +11,7 @@ import type { RuntimeEvent } from "@code-orb/schemas";
 
 import type { CliIO } from "../main.js";
 import { TerminalEventRenderer } from "../rendering/terminal-event-renderer.js";
+import { CliApprovalResolver } from "./create-approval-resolver.js";
 import { createModelClientFromEnv } from "./create-model-client.js";
 
 class RenderingEventSink implements EventSink {
@@ -39,7 +38,7 @@ export function createCliRuntime(io: CliIO): CliRuntime {
       agentEngine: new BasicAgentEngine(),
       toolExecutor: new BasicToolExecutor(),
       policyEngine: new MinimumPolicyEngine(),
-      approvalResolver: new AutoApproveResolver(),
+      approvalResolver: new CliApprovalResolver(io),
       modelClient: createModelClientFromEnv(process.env),
     },
   };
