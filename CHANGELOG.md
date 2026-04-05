@@ -6,6 +6,21 @@ The project intends to follow Keep a Changelog and Semantic Versioning once the 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-06
+
+### Added
+
+- repository-managed prompt assets for the system, planner, executor, and final reporting baseline
+- a benchmark-driven failing-test-fix task path and end-to-end coverage for the `0.2.0` alpha target
+- a broader small-task alpha set beyond the initial replacement-only path
+
+### Changed
+
+- improved CLI usability for local-repository execution, including clearer benchmark entry points and approval behavior
+- broadened task intake, repository understanding, planning, and tool selection beyond one narrow replacement-oriented flow
+- strengthened final reporting so benchmark-oriented runs explain changes, validation, and remaining risk more clearly
+- isolated the failing-test-fix benchmark runner so repeated benchmark execution does not mutate the source benchmark repository
+
 ## [0.1.0] - 2026-04-05
 
 ### Added

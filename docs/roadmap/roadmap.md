@@ -42,8 +42,7 @@ Release detail: [releases/0.1.0.md](./releases/0.1.0.md)
 
 Current status:
 
-- repository milestone achieved in the working tree
-- release/version decision still pending
+- released on 2026-04-06
 
 Release detail: [releases/0.2.0.md](./releases/0.2.0.md)
 - checklist: [releases/0.2.0-checklist.md](./releases/0.2.0-checklist.md)
