@@ -4,6 +4,7 @@ export type SessionStatus = "idle" | "running" | "completed" | "failed" | "cance
 export type TurnStatus = "pending" | "running" | "completed" | "failed" | "blocked";
 export type StepStatus = "pending" | "running" | "completed" | "failed" | "blocked";
 export type StepKind = "context" | "planning" | "tool_use" | "verification" | "reporting";
+export type PlanItemStatus = "pending" | "in_progress" | "completed" | "blocked";
 
 export interface SessionInput {
   cwd: string;
@@ -17,9 +18,15 @@ export interface TurnInput {
   source: "user" | "system";
 }
 
+export interface PlanItem {
+  id: string;
+  content: string;
+  status: PlanItemStatus;
+}
+
 export interface TurnPlan {
   summary: string;
-  items: string[];
+  items: PlanItem[];
 }
 
 export interface StepRuntimeState {

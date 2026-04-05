@@ -36,6 +36,8 @@ A turn should own:
 - the ordered steps taken to satisfy that request
 - the turn result reported back to the shell
 
+For V0.1, the turn-scoped plan should be represented as structured plan items rather than plain strings so future execution tracking is possible without redesigning the contract.
+
 ### Step
 
 A step is the smallest orchestration unit inside a turn.

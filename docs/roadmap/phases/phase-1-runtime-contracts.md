@@ -10,6 +10,7 @@ This phase is part of `0.1.0`, not a separate release.
 
 - define logical layering and dependency direction
 - define `Session`, `Turn`, and `Step` semantics
+- define structured turn plan / todo item contracts
 - define the agent engine vs tool executor split
 - define the minimum policy and permission model
 - define the minimum event catalog

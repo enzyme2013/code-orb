@@ -1,4 +1,5 @@
 import type { SessionId, Timestamp, TurnId } from "./ids.js";
+import type { PlanItem } from "./runtime.js";
 
 export type ValidationStatus = "passed" | "failed" | "skipped";
 export type TurnOutcome = "completed" | "failed" | "blocked";
@@ -18,7 +19,7 @@ export interface TurnReport {
   filesChanged?: string[];
   validations?: ValidationResult[];
   risks?: string[];
-  nextSteps?: string[];
+  nextSteps?: PlanItem[];
 }
 
 export interface SessionReport {
