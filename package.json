@@ -1,7 +1,7 @@
 {
   "name": "code-orb",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CLI-first coding agent with a future desktop path.",
   "license": "UNLICENSED",
   "scripts": {

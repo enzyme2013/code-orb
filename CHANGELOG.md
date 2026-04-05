@@ -6,6 +6,20 @@ The project intends to follow Keep a Changelog and Semantic Versioning once the 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-06
+
+### Added
+
+- explicit edit failure classification for blocked edits, target-not-found edits, and tool-level edit failures
+- additional `0.3.0` benchmark tracks for verification-still-fails and approval-denied edit outcomes
+- automated coverage for edit target mismatch, verify-still-failed, and blocked edit reporting paths
+
+### Changed
+
+- strengthened the edit-and-verify loop so successful edits, failed verification reruns, and blocked edits produce distinct outcomes
+- aligned session outcome reporting with turn outcome reporting so failed and blocked runs no longer appear as completed sessions
+- improved terminal reporting to show turn status, session outcome, changed files, validation results, and remaining risk more clearly
+
 ## [0.2.0] - 2026-04-06
 
 ### Added

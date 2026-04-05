@@ -53,6 +53,12 @@ Release detail: [releases/0.2.0.md](./releases/0.2.0.md)
 - verification loops and clearer failure handling
 - structured final report improvements
 
+Current status:
+
+- released on 2026-04-06
+
+Release detail: [releases/0.3.0.md](./releases/0.3.0.md)
+
 ### 0.4.0 Session And Git Awareness
 
 - stronger session persistence
