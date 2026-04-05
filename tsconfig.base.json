@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -7,6 +8,17 @@
     "declaration": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@code-orb/core": [
+        "packages/core/src/index.ts"
+      ],
+      "@code-orb/schemas": [
+        "packages/schemas/src/index.ts"
+      ],
+      "@code-orb/shared": [
+        "packages/shared/src/index.ts"
+      ]
+    }
   }
 }
