@@ -2,13 +2,22 @@
 
 Code Orb is a CLI-first coding agent project with a future path to desktop.
 
-The repository is currently in a docs-first bootstrap phase. The immediate goal is to define the engineering frame clearly enough that human contributors and coding agents can build the product without re-litigating basic structure on every task.
+The repository is now in an early runnable stage.
 
-## Current Priorities
+Today it provides:
 
-- Establish a single source of truth for agent-facing development guidance.
-- Define the initial repository layout and architectural boundaries.
-- Set versioning and roadmap rules before implementation accelerates.
+- a one-shot CLI path with `orb run "<task>"`
+- an interactive foreground CLI with `orb chat`
+- local session artifacts under `.orb/sessions/`
+- git-aware session reporting for pre-existing vs current-run changes
+- benchmark-backed validation for key milestone paths
+
+The current product shape is still intentionally narrow. The shell and runtime are real, but general task execution is not yet broad or highly autonomous.
+
+Release status:
+
+- `0.4.0` Session And Git Awareness: released
+- `0.5.0` Interactive CLI: implemented
 
 ## Read First
 
@@ -18,29 +27,15 @@ The repository is currently in a docs-first bootstrap phase. The immediate goal 
 - [docs/architecture/overview.md](./docs/architecture/overview.md)
 - [docs/roadmap/roadmap.md](./docs/roadmap/roadmap.md)
 
-## Running
+## Quick Start
 
-Run the CLI from the repository root:
-
-```bash
-pnpm run cli:run -- run "<task>"
-```
-
-Run the primary benchmark path:
+Install dependencies:
 
 ```bash
-pnpm run benchmark:failing-test-fix
+pnpm install
 ```
 
-Provider configuration:
-
-- set both `OPENAI_API_KEY` and `OPENAI_MODEL` to use a real provider
-- set `OPENAI_BASE_URL` only when targeting an OpenAI-compatible endpoint
-- Code Orb automatically loads `.env` and `.env.local` from the active working directory before creating the model client
-- shell environment variables still win over `.env` file values
-- if no provider variables are set, Code Orb falls back to the mock model client
-
-Quick local setup:
+Configure a real provider:
 
 ```bash
 cp .env.example .env.local
@@ -52,13 +47,79 @@ or:
 bash scripts/setup-local-env.sh
 ```
 
-Then edit `.env.local` and set your real provider values.
+Then edit `.env.local` and set:
 
-Interactive CLI example:
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- optionally `OPENAI_BASE_URL` for an OpenAI-compatible endpoint
+
+Provider notes:
+
+- Code Orb automatically loads `.env` and `.env.local` from the active working directory
+- shell environment variables still override `.env` file values
+- if no provider variables are set, Code Orb falls back to the mock model client
+
+## Running
+
+Interactive CLI:
 
 ```bash
 pnpm run cli:run -- chat
 ```
+
+One-shot task execution:
+
+```bash
+pnpm run cli:run -- run "<task>"
+```
+
+Run against another repository:
+
+```bash
+pnpm run cli:run -- --cwd /path/to/repo chat
+pnpm run cli:run -- --cwd /path/to/repo run "<task>"
+```
+
+Session inspection:
+
+```bash
+pnpm run cli:run -- sessions list
+pnpm run cli:run -- sessions show <session-id>
+```
+
+Interactive commands:
+
+- `/help`
+- `/status`
+- `/exit`
+- `/quit`
+- `exit`
+- `quit`
+
+## Benchmarks
+
+Primary benchmark path:
+
+```bash
+pnpm run benchmark:failing-test-fix
+```
+
+Interactive CLI milestone benchmark:
+
+```bash
+pnpm run benchmark:interactive-multi-turn
+```
+
+## Current Scope
+
+Code Orb is currently best suited for:
+
+- fixture or small local-repository tasks
+- explicit edit-and-verify requests
+- interactive multi-turn iteration in one foreground session
+- session-aware follow-up work and repository-state inspection
+
+It is not yet a broadly capable general coding agent. The current runtime is still narrow in task interpretation and tool selection.
 
 ## Repository Layout
 
@@ -71,6 +132,15 @@ tests/        Unit, integration, end-to-end, and fixture repositories.
 benchmarks/   Benchmark tasks and evaluation repositories for milestone validation.
 scripts/      Automation scripts that support development and release work.
 ```
+
+## Key Docs
+
+- contributor and agent rules: [AGENTS.md](./AGENTS.md)
+- product scope: [docs/product/v0-scope.md](./docs/product/v0-scope.md)
+- architecture overview: [docs/architecture/overview.md](./docs/architecture/overview.md)
+- execution model: [docs/architecture/execution-model.md](./docs/architecture/execution-model.md)
+- roadmap: [docs/roadmap/roadmap.md](./docs/roadmap/roadmap.md)
+- `0.5.0` interactive CLI milestone: [docs/roadmap/releases/0.5.0.md](./docs/roadmap/releases/0.5.0.md)
 
 ## Working Style
 
