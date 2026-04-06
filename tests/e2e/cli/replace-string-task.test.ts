@@ -70,5 +70,8 @@ describe("orb run end-to-end", () => {
     expect(output).toContain("Risks: none");
     expect(output).toContain("Session complete:");
     expect(output).toContain("Session outcome: completed");
+    expect(output).toContain("Repository dirty before run: no");
+    expect(output).not.toContain("Current-run change:");
+    expect(output).toContain("Session artifact:");
   });
 });

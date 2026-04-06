@@ -5,4 +5,5 @@ export type * from "./model.js";
 export type * from "./policy.js";
 export type * from "./report.js";
 export type * from "./runtime.js";
+export type * from "./session-artifact.js";
 export type * from "./tools.js";

@@ -62,6 +62,10 @@ Each session should move through these phases:
 5. turn report
 6. final session report
 
+For `0.4.0`, each completed or failed foreground session also writes a local session artifact under the working repository so later CLI inspection and follow-up work can reference the prior result explicitly.
+
+The artifact is not a resumable execution checkpoint. It is a persisted session report plus repository-state context and optional prior-session linkage.
+
 ## Turn Lifecycle
 
 Within a turn, the expected flow is:
@@ -122,3 +126,17 @@ If a local daemon is introduced later, it should preserve:
 - the same tool contracts where possible
 
 Only the hosting model should change, not the product semantics.
+
+## V0.4 Additions
+
+The `0.4.0` runtime extends the single-process CLI model with local continuity, not background execution.
+
+Specifically:
+
+- `orb run` persists a session artifact in `.orb/sessions/`
+- `orb sessions list` and `orb sessions show <session-id>` inspect that local store
+- git-backed runs capture before and after working-tree snapshots
+- final session reporting distinguishes pre-existing repository changes from current-run changes
+- `orb run --from-session <session-id> ...` injects a prior-session summary into the new run's planning context
+
+This preserves the one-run-one-session execution model while making the CLI aware of prior local work.

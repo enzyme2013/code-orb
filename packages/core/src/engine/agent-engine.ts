@@ -1,4 +1,5 @@
 import type { ModelProfile, StepRuntimeState, TurnReport, TurnRuntimeState } from "@code-orb/schemas";
+import type { FollowUpContext } from "@code-orb/schemas";
 
 import type { ModelClient } from "../adapters/ports/model-client.js";
 import type { EventSink } from "../events/event-sink.js";
@@ -13,6 +14,7 @@ export interface AgentExecutionContext {
   toolExecutor: ToolExecutor;
   policyEngine: PolicyEngine;
   approvalResolver: ApprovalResolver;
+  followUpContext?: FollowUpContext;
 }
 
 export interface AgentEngine {

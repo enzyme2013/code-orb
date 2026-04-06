@@ -27,7 +27,11 @@ export class FakeModelClient implements ModelClient {
 
   constructor(private readonly content: string) {}
 
+  requests: ModelRequest[] = [];
+
   async complete(request: ModelRequest): Promise<ModelResponse> {
+    this.requests.push(request);
+
     return {
       provider: this.provider,
       model: "fake-model",
@@ -48,7 +52,10 @@ export class FailingModelClient implements ModelClient {
 
   constructor(private readonly message: string) {}
 
+  requests: ModelRequest[] = [];
+
   async complete(_request: ModelRequest): Promise<ModelResponse> {
+    this.requests.push(_request);
     throw new Error(this.message);
   }
 }

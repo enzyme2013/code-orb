@@ -1,7 +1,9 @@
 import {
   BasicAgentEngine,
+  LocalGitStateReader,
   BasicSessionRunner,
   BasicToolExecutor,
+  LocalSessionStore,
   MinimumPolicyEngine,
   type EventSink,
   type SessionRunner,
@@ -40,6 +42,8 @@ export function createCliRuntime(io: CliIO): CliRuntime {
       policyEngine: new MinimumPolicyEngine(),
       approvalResolver: new CliApprovalResolver(io),
       modelClient: createModelClientFromEnv(process.env),
+      gitStateReader: new LocalGitStateReader(),
+      sessionStore: new LocalSessionStore(),
     },
   };
 }

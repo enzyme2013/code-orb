@@ -1,4 +1,5 @@
 import type { SessionId, StepId, Timestamp, ToolCallId, TurnId } from "./ids.js";
+import type { SessionOutcome, ValidationResult } from "./report.js";
 
 export type SessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
 export type TurnStatus = "pending" | "running" | "completed" | "failed" | "blocked";
@@ -6,11 +7,24 @@ export type StepStatus = "pending" | "running" | "completed" | "failed" | "block
 export type StepKind = "context" | "planning" | "tool_use" | "verification" | "reporting";
 export type PlanItemStatus = "pending" | "in_progress" | "completed" | "blocked";
 
+export interface FollowUpContext {
+  priorSessionId: SessionId;
+  priorTask: string;
+  priorOutcome: SessionOutcome;
+  priorSummary: string;
+  priorChangedFiles: string[];
+  priorValidations: ValidationResult[];
+  priorRisks: string[];
+}
+
 export interface SessionInput {
   cwd: string;
   task: string;
   interactive?: boolean;
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    followUpContext?: FollowUpContext;
+    [key: string]: unknown;
+  };
 }
 
 export interface TurnInput {

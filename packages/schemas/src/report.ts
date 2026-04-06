@@ -1,5 +1,6 @@
 import type { SessionId, Timestamp, TurnId } from "./ids.js";
 import type { PlanItem } from "./runtime.js";
+import type { GitWorkingTreeSnapshot } from "./session-artifact.js";
 
 export type ValidationStatus = "passed" | "failed" | "skipped";
 export type TurnOutcome = "completed" | "failed" | "blocked";
@@ -22,6 +23,22 @@ export interface TurnReport {
   nextSteps?: PlanItem[];
 }
 
+export interface RepositoryChangeClassification {
+  preExistingChangedFiles: string[];
+  currentRunChangedFiles: string[];
+  touchedPreExistingFiles: string[];
+}
+
+export interface RepositoryStateReport {
+  initialBranch?: string;
+  finalBranch?: string;
+  wasDirtyBeforeRun: boolean;
+  isDirtyAfterRun: boolean;
+  snapshotBefore?: GitWorkingTreeSnapshot;
+  snapshotAfter?: GitWorkingTreeSnapshot;
+  changeClassification?: RepositoryChangeClassification;
+}
+
 export interface SessionReport {
   sessionId: SessionId;
   outcome: SessionOutcome;
@@ -29,4 +46,7 @@ export interface SessionReport {
   turnReports: TurnReport[];
   startedAt: Timestamp;
   endedAt?: Timestamp;
+  artifactPath?: string;
+  followUpFromSessionId?: SessionId;
+  repositoryState?: RepositoryStateReport;
 }

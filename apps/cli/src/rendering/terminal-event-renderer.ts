@@ -1,4 +1,4 @@
-import type { RuntimeEvent } from "@code-orb/schemas";
+import type { RepositoryStateReport, RuntimeEvent } from "@code-orb/schemas";
 
 import type { CliIO } from "../main.js";
 
@@ -55,11 +55,35 @@ export class TerminalEventRenderer {
             : "Risks: none\n",
         ].join("");
       case "session.completed":
-        return `Session complete: ${event.payload.report.summary}\nSession outcome: ${event.payload.report.outcome}\n`;
+        return [
+          `Session complete: ${event.payload.report.summary}\n`,
+          `Session outcome: ${event.payload.report.outcome}\n`,
+          event.payload.report.followUpFromSessionId
+            ? `Follow-up from session: ${event.payload.report.followUpFromSessionId}\n`
+            : "",
+          ...formatRepositoryState(event.payload.report.repositoryState),
+          event.payload.report.artifactPath ? `Session artifact: ${event.payload.report.artifactPath}\n` : "",
+        ].join("");
       case "error.raised":
         return `Error: ${event.payload.message}\n`;
       default:
         return null;
     }
   }
+}
+
+function formatRepositoryState(report: RepositoryStateReport | undefined): string[] {
+  if (!report) {
+    return [];
+  }
+
+  return [
+    report.initialBranch ? `Repository branch before: ${report.initialBranch}\n` : "",
+    report.finalBranch ? `Repository branch after: ${report.finalBranch}\n` : "",
+    `Repository dirty before run: ${report.wasDirtyBeforeRun ? "yes" : "no"}\n`,
+    `Repository dirty after run: ${report.isDirtyAfterRun ? "yes" : "no"}\n`,
+    ...(report.changeClassification?.preExistingChangedFiles.map((path) => `Pre-existing change: ${path}\n`) ?? []),
+    ...(report.changeClassification?.currentRunChangedFiles.map((path) => `Current-run change: ${path}\n`) ?? []),
+    ...(report.changeClassification?.touchedPreExistingFiles.map((path) => `Touched pre-existing file: ${path}\n`) ?? []),
+  ];
 }

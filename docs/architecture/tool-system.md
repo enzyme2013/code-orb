@@ -62,3 +62,19 @@ Agent Engine
 ## Future Extension
 
 Future external tool providers or plugin-based tools should still conform to the same contract shape and event semantics documented now.
+
+## V0.4 Session And Git Context
+
+`0.4.0` adds two runtime adapters adjacent to the existing tool path:
+
+- a local session store for persisted session artifacts
+- a git state reader for working-tree snapshots
+
+These are runtime support components, not user-invoked tools. They do not appear as agent tool calls, but they do feed artifact generation and final reporting.
+
+This distinction matters:
+
+- agent-facing tools remain the mechanism for reading, editing, and executing within the repository
+- session persistence and git snapshotting are runtime-owned observations used for auditability and continuity
+
+The CLI may render these observations, but the source of truth remains the runtime artifact and report contracts.

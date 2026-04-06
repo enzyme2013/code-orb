@@ -45,7 +45,7 @@ When acting as a coding agent in this repository:
 - Keep progress updates concise and concrete.
 - Report blockers immediately instead of silently stalling.
 - End with changed files, validation status, and notable risks or follow-ups.
-- Do not ask for permission to continue implementation with phrases such as `如果你要，我下一步可以...`, `你要我直接...吗?`, `要不要我帮你...`, `是否需要我...`, `我可以帮你...，要我做吗?`, or offer-style `下一步可以...` wording. State the next concrete action directly and execute it unless the user explicitly asked to pause, choose, or confirm.
+- Do not ask for permission to continue implementation with phrases such as `如果你要，我下一步可以...`, `如果你要我继续...`, `如果你愿意...`, `你要我直接...吗?`, `要不要我帮你...`, `是否需要我...`, `我可以帮你...，要我做吗?`, or offer-style `下一步可以...` wording. State the next concrete action directly and execute it unless the user explicitly asked to pause, choose, or confirm.
 
 When a task affects multiple concerns, use this order:
 

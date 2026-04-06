@@ -102,6 +102,13 @@ export class BasicAgentEngine implements AgentEngine {
       },
     ];
 
+    if (context.followUpContext) {
+      messages.splice(messages.length - 1, 0, {
+        role: "system",
+        content: formatFollowUpContext(context.followUpContext),
+      });
+    }
+
     const response = await context.modelClient.complete({
       sessionId: turn.sessionId,
       turnId: turn.id,
@@ -548,6 +555,22 @@ export class BasicAgentEngine implements AgentEngine {
     step.status = "completed";
     step.endedAt = createTimestamp();
   }
+}
+
+function formatFollowUpContext(context: AgentExecutionContext["followUpContext"]): string {
+  if (!context) {
+    return "";
+  }
+
+  return [
+    `Follow-up context from prior session ${context.priorSessionId}:`,
+    `Prior task: ${context.priorTask}`,
+    `Prior outcome: ${context.priorOutcome}`,
+    `Prior summary: ${context.priorSummary}`,
+    `Prior changed files: ${context.priorChangedFiles.join(", ") || "none"}`,
+    `Prior validations: ${context.priorValidations.map((validation) => `${validation.name}=${validation.status}`).join(", ") || "none"}`,
+    `Prior risks: ${context.priorRisks.join(", ") || "none"}`,
+  ].join("\n");
 }
 
 function parseReplaceAndVerifyTask(task: string): { searchText: string; replaceText: string; verifyCommand?: string } | null {

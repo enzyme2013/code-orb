@@ -1,4 +1,6 @@
 import type {
+  GitWorkingTreeSnapshot,
+  SessionArtifact,
   SessionInput,
   SessionOutcome,
   SessionReport,
@@ -8,6 +10,7 @@ import type {
 } from "@code-orb/schemas";
 
 import { createRuntimeId, createTimestamp } from "../internal/runtime-utils.js";
+import { classifyRepositoryChanges } from "./change-classifier.js";
 import type { AgentExecutionContext } from "../engine/agent-engine.js";
 import type { SessionRunner, SessionRunnerContext } from "./session-runner.js";
 
@@ -38,6 +41,7 @@ export class BasicSessionRunner implements SessionRunner {
 
   async run(input: SessionInput, context: SessionRunnerContext): Promise<SessionReport> {
     const session = this.createSession(input);
+    const gitSnapshotBefore = await context.gitStateReader.readSnapshot(input.cwd);
     session.status = "running";
 
     context.eventSink.emit({
@@ -96,7 +100,19 @@ export class BasicSessionRunner implements SessionRunner {
         turnReports: [report],
         startedAt: session.startedAt,
         endedAt: session.endedAt,
+        followUpFromSessionId: input.metadata?.followUpContext?.priorSessionId,
       };
+
+      const gitSnapshotAfter = await context.gitStateReader.readSnapshot(input.cwd);
+      sessionReport.repositoryState = this.createRepositoryStateReport(
+        sessionReport,
+        gitSnapshotBefore,
+        gitSnapshotAfter,
+      );
+      const storedArtifact = await context.sessionStore.save(
+        this.createSessionArtifact(session, sessionReport, gitSnapshotBefore, gitSnapshotAfter),
+      );
+      sessionReport.artifactPath = storedArtifact.artifactPath;
 
       context.eventSink.emit({
         id: createRuntimeId("evt"),
@@ -112,6 +128,7 @@ export class BasicSessionRunner implements SessionRunner {
     } catch (error) {
       session.status = "failed";
       session.endedAt = createTimestamp();
+      const failureMessage = error instanceof Error ? error.message : "Unknown error";
 
       context.eventSink.emit({
         id: createRuntimeId("evt"),
@@ -121,13 +138,128 @@ export class BasicSessionRunner implements SessionRunner {
         timestamp: createTimestamp(),
         payload: {
           code: "session_run_failed",
-          message: error instanceof Error ? error.message : "Unknown error",
+          message: failureMessage,
           retryable: false,
         },
       });
 
+      const gitSnapshotAfter = await context.gitStateReader.readSnapshot(input.cwd);
+
+      await context.sessionStore.save(
+        this.createSessionArtifact(
+          session,
+          this.createFailedSessionReport(session, turn.id, failureMessage, input.metadata?.followUpContext?.priorSessionId),
+          gitSnapshotBefore,
+          gitSnapshotAfter,
+        ),
+      );
+
       throw error;
     }
+  }
+
+  private createSessionArtifact(
+    session: SessionRuntimeState,
+    report: SessionReport,
+    gitSnapshotBefore?: GitWorkingTreeSnapshot,
+    gitSnapshotAfter?: GitWorkingTreeSnapshot,
+  ): SessionArtifact {
+    const changedFiles = new Set<string>();
+    const validations: SessionArtifact["validations"] = [];
+    const risks = new Set<string>();
+
+    for (const turnReport of report.turnReports) {
+      for (const filePath of turnReport.filesChanged ?? []) {
+        changedFiles.add(filePath);
+      }
+
+      for (const validation of turnReport.validations ?? []) {
+        validations.push(validation);
+      }
+
+      for (const risk of turnReport.risks ?? []) {
+        risks.add(risk);
+      }
+    }
+
+    return {
+      schemaVersion: 1,
+      sessionId: session.id,
+      task: session.task,
+      cwd: session.cwd,
+      startedAt: session.startedAt,
+      endedAt: report.endedAt,
+      savedAt: createTimestamp(),
+      outcome: report.outcome,
+      followUpFromSessionId: report.followUpFromSessionId,
+      summary: report.summary,
+      changedFiles: [...changedFiles],
+      validations,
+      risks: [...risks],
+      gitSnapshotBefore,
+      gitSnapshotAfter,
+      changeClassification: report.repositoryState?.changeClassification,
+      turnReports: report.turnReports,
+    };
+  }
+
+  private createRepositoryStateReport(
+    report: SessionReport,
+    gitSnapshotBefore?: GitWorkingTreeSnapshot,
+    gitSnapshotAfter?: GitWorkingTreeSnapshot,
+  ): SessionReport["repositoryState"] {
+    if (!gitSnapshotBefore && !gitSnapshotAfter) {
+      return undefined;
+    }
+
+    const currentRunFiles = this.collectCurrentRunFiles(report);
+
+    return {
+      initialBranch: gitSnapshotBefore?.branch,
+      finalBranch: gitSnapshotAfter?.branch,
+      wasDirtyBeforeRun: gitSnapshotBefore?.isDirty ?? false,
+      isDirtyAfterRun: gitSnapshotAfter?.isDirty ?? false,
+      snapshotBefore: gitSnapshotBefore,
+      snapshotAfter: gitSnapshotAfter,
+      changeClassification: classifyRepositoryChanges(gitSnapshotBefore, gitSnapshotAfter, currentRunFiles),
+    };
+  }
+
+  private collectCurrentRunFiles(report: SessionReport): string[] {
+    const files = new Set<string>();
+
+    for (const turnReport of report.turnReports) {
+      for (const filePath of turnReport.filesChanged ?? []) {
+        files.add(filePath);
+      }
+    }
+
+    return [...files].sort();
+  }
+
+  private createFailedSessionReport(
+    session: SessionRuntimeState,
+    turnId: string,
+    message: string,
+    followUpFromSessionId?: string,
+  ): SessionReport {
+    return {
+      sessionId: session.id,
+      outcome: "failed",
+      summary: message,
+      followUpFromSessionId,
+      turnReports: [
+        {
+          sessionId: session.id,
+          turnId,
+          outcome: "failed",
+          summary: message,
+          risks: [message],
+        },
+      ],
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+    };
   }
 
   private createAgentExecutionContext(input: SessionInput, context: SessionRunnerContext): AgentExecutionContext {
@@ -139,6 +271,7 @@ export class BasicSessionRunner implements SessionRunner {
       toolExecutor: context.toolExecutor,
       policyEngine: context.policyEngine,
       approvalResolver: context.approvalResolver,
+      followUpContext: input.metadata?.followUpContext,
     };
   }
 }

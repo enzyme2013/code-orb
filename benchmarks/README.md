@@ -14,3 +14,5 @@ Current milestone-aligned benchmarks:
 - `failing-test-fix/` for the `0.2.0` runnable alpha path
 - `verification-still-fails/` for the `0.3.0` edit-and-verify failure-reporting path
 - `approval-denied/` for the `0.3.0` blocked-edit reporting path
+- `existing-changes-awareness/` for the `0.4.0` repository-awareness path
+- `session-follow-up/` for the `0.4.0` prior-session continuity path
