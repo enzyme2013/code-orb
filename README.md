@@ -36,7 +36,29 @@ Provider configuration:
 
 - set both `OPENAI_API_KEY` and `OPENAI_MODEL` to use a real provider
 - set `OPENAI_BASE_URL` only when targeting an OpenAI-compatible endpoint
+- Code Orb automatically loads `.env` and `.env.local` from the active working directory before creating the model client
+- shell environment variables still win over `.env` file values
 - if no provider variables are set, Code Orb falls back to the mock model client
+
+Quick local setup:
+
+```bash
+cp .env.example .env.local
+```
+
+or:
+
+```bash
+bash scripts/setup-local-env.sh
+```
+
+Then edit `.env.local` and set your real provider values.
+
+Interactive CLI example:
+
+```bash
+pnpm run cli:run -- chat
+```
 
 ## Repository Layout
 

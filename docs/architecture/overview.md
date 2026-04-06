@@ -138,11 +138,16 @@ This prevents the core runtime from being locked to one filesystem, one provider
 
 The intended runtime flow is:
 
-1. CLI receives a task and runtime options.
+1. CLI receives either a one-shot task or an interactive shell command.
 2. CLI creates a session and hands execution to `packages/core`.
-3. Core gathers context, plans, invokes tools, applies edits, and runs verification.
+3. Core gathers context, plans, invokes tools, applies edits, and runs verification per turn.
 4. Core emits structured events defined in `packages/schemas`.
-5. CLI renders progress and the final report to the terminal.
+5. CLI renders progress and turn/session reporting to the terminal.
+
+For `0.5.0`, `apps/cli` now also owns the interactive foreground loop for `orb chat`, but the loop is only a shell concern.
+
+- `apps/cli` owns prompt intake, slash-style control commands, and terminal interaction flow
+- `packages/core` still owns session execution, turn execution, reporting, and persistence semantics
 
 ## Boundary Rules
 

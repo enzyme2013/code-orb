@@ -1,4 +1,4 @@
-import type { SessionInput, SessionReport, SessionRuntimeState, TurnInput, TurnRuntimeState } from "@code-orb/schemas";
+import type { SessionInput, SessionReport, SessionRuntimeState, TurnInput, TurnReport, TurnRuntimeState } from "@code-orb/schemas";
 
 import type { ModelClient } from "../adapters/ports/model-client.js";
 import type { GitStateReader } from "../adapters/git/git-state-reader.js";
@@ -23,4 +23,7 @@ export interface SessionRunner {
   run(input: SessionInput, context: SessionRunnerContext): Promise<SessionReport>;
   createSession(input: SessionInput): SessionRuntimeState;
   createTurn(session: SessionRuntimeState, input: TurnInput): TurnRuntimeState;
+  runTurn(session: SessionRuntimeState, input: TurnInput, context: SessionRunnerContext): Promise<TurnReport>;
+  completeSession(session: SessionRuntimeState, context: SessionRunnerContext): Promise<SessionReport>;
+  failSession(session: SessionRuntimeState, context: SessionRunnerContext, error: unknown): Promise<SessionReport>;
 }

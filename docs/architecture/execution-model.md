@@ -2,7 +2,12 @@
 
 ## Default Model
 
-The initial execution model is a single-process CLI runtime. One user request maps to one foreground session.
+The default execution model remains a single-process CLI runtime.
+
+There are now two foreground entry modes:
+
+- in one-shot mode, one user request maps to one foreground session
+- in interactive mode, one foreground session may contain many user turns until the session exits
 
 This is a deliberate simplification so that the project can validate the agent loop before introducing daemons, background workers, or multi-agent scheduling.
 
@@ -23,7 +28,7 @@ A session is the outer execution container.
 Examples:
 
 - in a one-shot CLI command, one invocation usually creates one session with one turn
-- in a future interactive CLI, one session may contain many turns until the session is cleared or closed
+- in `orb chat`, one session may contain many turns until the session is cleared or closed
 
 ### Turn
 
@@ -93,7 +98,8 @@ Retries should be explicit and bounded. The system should avoid invisible loops 
 
 Initial policy:
 
-- one task owns one working session
+- in one-shot mode, one task owns one working session
+- in interactive mode, one working session can own many user turns
 - one user input creates one turn
 - retries happen at the step level inside a turn
 - retries are recorded as events
@@ -140,3 +146,17 @@ Specifically:
 - `orb run --from-session <session-id> ...` injects a prior-session summary into the new run's planning context
 
 This preserves the one-run-one-session execution model while making the CLI aware of prior local work.
+
+## V0.5 Additions
+
+The `0.5.0` runtime keeps the same core session, turn, and step semantics while exposing an interactive foreground shell.
+
+Specifically:
+
+- `orb chat` starts one foreground interactive session
+- each interactive user input creates a new turn in that session
+- `/help`, `/status`, and `/exit` are handled by the CLI shell layer as interactive control commands
+- the session persists one final artifact containing all turn reports when the interactive session exits
+- same-session follow-up requests can reference the previous turn through session-scoped context instead of using `--from-session`
+
+This extends the CLI from one-shot commands to multi-turn foreground interaction without introducing daemon mode or changing the core runtime boundaries.

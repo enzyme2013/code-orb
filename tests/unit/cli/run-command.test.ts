@@ -10,6 +10,8 @@ import { getCliUsage, parseCliArgs } from "../../../apps/cli/src/commands/run";
 function createTestIO(cwd = "/repo") {
   const stdout: string[] = [];
   const stderr: string[] = [];
+  const prompts: string[] = [];
+  const promptResponses: Array<string | null> = [];
 
   return {
     io: {
@@ -25,9 +27,15 @@ function createTestIO(cwd = "/repo") {
       },
       cwd: () => cwd,
       confirm: async () => true,
+      prompt: async (message: string) => {
+        prompts.push(message);
+        return promptResponses.shift() ?? null;
+      },
     },
     stdout,
     stderr,
+    prompts,
+    promptResponses,
   };
 }
 
@@ -114,6 +122,22 @@ describe("orb run command contract", () => {
     expect(parsed.sessionInput.task).toBe("continue the task");
   });
 
+  it("parses `orb chat`", () => {
+    const parsed = parseCliArgs(["chat"], "/repo");
+
+    expect(parsed.command).toBe("chat");
+
+    if (parsed.command !== "chat") {
+      throw new Error("expected chat command");
+    }
+
+    expect(parsed.sessionInput).toEqual({
+      cwd: "/repo",
+      task: "Interactive CLI session",
+      interactive: true,
+    });
+  });
+
   it("returns an invalid result when the task is missing", () => {
     const parsed = parseCliArgs(["run"], "/repo");
 
@@ -157,6 +181,71 @@ describe("orb run command contract", () => {
       expect(stdout.join("")).toContain("Session complete:");
       expect(stdout.join("")).toContain("Repository dirty before run: no");
       expect(stdout.join("")).toContain("Session artifact:");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("runs an interactive chat session with help, status, and exit", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-cli-test-"));
+    const { io, stdout, stderr, prompts, promptResponses } = createTestIO(cwd);
+    promptResponses.push("/help", "summarize the next action", "/status", "/exit");
+
+    try {
+      const exitCode = await main(["chat"], io);
+
+      expect(exitCode).toBe(0);
+      expect(stderr).toEqual([]);
+      expect(prompts).toEqual(["orb> ", "orb> ", "orb> ", "orb> "]);
+
+      const output = stdout.join("");
+      expect(output).toContain("Interactive session started. Type /help for commands.");
+      expect(output).toContain("Interactive commands:");
+      expect(output).toContain("Turn 1: summarize the next action");
+      expect(output).toContain("Session:");
+      expect(output).toContain("Mode: interactive");
+      expect(output).toContain("Turns: 1");
+      expect(output).toContain("Interactive session exiting.");
+      expect(output).toContain("Session complete:");
+      expect(output).toContain("Session artifact:");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts plain `exit` as an interactive exit alias", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-cli-test-"));
+    const { io, stdout, stderr, promptResponses } = createTestIO(cwd);
+    promptResponses.push("exit");
+
+    try {
+      const exitCode = await main(["chat"], io);
+
+      expect(exitCode).toBe(0);
+      expect(stderr).toEqual([]);
+
+      const output = stdout.join("");
+      expect(output).toContain("Interactive session exiting.");
+      expect(output).not.toContain("Turn 1: exit");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts plain `quit` as an interactive exit alias", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-cli-test-"));
+    const { io, stdout, stderr, promptResponses } = createTestIO(cwd);
+    promptResponses.push("quit");
+
+    try {
+      const exitCode = await main(["chat"], io);
+
+      expect(exitCode).toBe(0);
+      expect(stderr).toEqual([]);
+
+      const output = stdout.join("");
+      expect(output).toContain("Interactive session exiting.");
+      expect(output).not.toContain("Turn 1: quit");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

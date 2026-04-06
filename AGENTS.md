@@ -34,6 +34,7 @@ For early-stage architectural work, the minimum context is usually:
 - `README.md`
 - `docs/product/v0-scope.md`
 - `docs/architecture/overview.md`
+- `docs/roadmap/roadmap.md`
 - the relevant ADRs
 
 ## Collaboration Protocol
@@ -44,8 +45,11 @@ When acting as a coding agent in this repository:
 - Surface assumptions early, especially if they affect architecture or scope.
 - Keep progress updates concise and concrete.
 - Report blockers immediately instead of silently stalling.
-- End with changed files, validation status, and notable risks or follow-ups.
-- Do not ask for permission to continue implementation with phrases such as `如果你要，我下一步可以...`, `如果你要我继续...`, `如果你愿意...`, `你要我直接...吗?`, `要不要我帮你...`, `是否需要我...`, `我可以帮你...，要我做吗?`, or offer-style `下一步可以...` wording. State the next concrete action directly and execute it unless the user explicitly asked to pause, choose, or confirm.
+- End with changed files, validation status, and notable risks or deferred work.
+- Do not ask for permission to continue implementation.
+- Avoid phrases such as `如果你要，我下一步可以...`, `如果你要我继续...`, `如果你愿意...`, `你要我直接...吗?`, `要不要我帮你...`, `是否需要我...`, `我可以帮你...，要我做吗?`, and offer-style `下一步可以...` wording.
+- Explicitly avoid `如果你愿意...` phrasing when offering to continue or proposing next steps.
+- State the next concrete action directly and execute it unless the user explicitly asked to pause, choose, or confirm.
 
 When a task affects multiple concerns, use this order:
 
@@ -139,4 +143,6 @@ A change is not done just because code compiles. Before considering a task compl
 
 ## Current Status
 
-The repository is still in bootstrap. Many commands and workflows are placeholders. If tooling is missing, prefer adding the smallest viable scaffold instead of inventing a full production stack prematurely.
+The repository is in an early runnable stage: the CLI, tests, and benchmark flows exist, but breadth and robustness are still limited.
+
+Prefer small, honest extensions over premature productionization. If tooling is missing, add the smallest viable scaffold that matches the documented architecture and roadmap.

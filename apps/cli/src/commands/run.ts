@@ -5,6 +5,11 @@ export interface RunCommandRequest {
   sessionInput: SessionInput;
 }
 
+export interface ChatCommandRequest {
+  command: "chat";
+  sessionInput: SessionInput;
+}
+
 export interface SessionsListCommandRequest {
   command: "sessions_list";
   cwd: string;
@@ -29,6 +34,7 @@ export interface InvalidCommandResult {
 
 export type ParsedCliCommand =
   | RunCommandRequest
+  | ChatCommandRequest
   | SessionsListCommandRequest
   | SessionsShowCommandRequest
   | HelpCommandResult
@@ -36,6 +42,8 @@ export type ParsedCliCommand =
 
 const USAGE = `Usage:
   orb --cwd <path> run "<task>"
+  orb --cwd <path> chat
+  orb chat
   orb run --from-session <session-id> "<task>"
   orb run "<task>"
   orb sessions list
@@ -44,12 +52,14 @@ const USAGE = `Usage:
 
 Examples:
   pnpm run cli:run -- --cwd benchmarks/failing-test-fix/repo run "Fix the failing test without changing the intended behavior."
+  pnpm run cli:run -- chat
   pnpm run cli:run -- run --from-session ses_123 "Continue from the prior result and add verification."
   pnpm run cli:run -- sessions list
   pnpm run cli:run -- sessions show ses_123
   pnpm run benchmark:failing-test-fix
 
 Environment:
+  .env / .env.local  Optional local files loaded from the active cwd
   OPENAI_API_KEY   Required with OPENAI_MODEL to use a real provider
   OPENAI_MODEL     Required with OPENAI_API_KEY to use a real provider
   OPENAI_BASE_URL  Optional override for OpenAI-compatible endpoints
@@ -91,6 +101,17 @@ export function parseCliArgs(args: string[], cwd: string): ParsedCliCommand {
   }
 
   if (command !== "run") {
+    if (command === "chat") {
+      return {
+        command: "chat",
+        sessionInput: {
+          cwd: workingDirectory,
+          task: "Interactive CLI session",
+          interactive: true,
+        },
+      };
+    }
+
     if (command === "sessions") {
       const [subcommand, ...sessionArgs] = rest;
 

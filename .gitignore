@@ -4,5 +4,7 @@ coverage
 .DS_Store
 .env
 .env.*
+!.env.example
+.orb/
 *.log
 .claude/settings.local.json

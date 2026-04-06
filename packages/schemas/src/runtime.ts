@@ -1,5 +1,6 @@
 import type { SessionId, StepId, Timestamp, ToolCallId, TurnId } from "./ids.js";
-import type { SessionOutcome, ValidationResult } from "./report.js";
+import type { SessionOutcome, TurnReport, ValidationResult } from "./report.js";
+import type { GitWorkingTreeSnapshot } from "./session-artifact.js";
 
 export type SessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
 export type TurnStatus = "pending" | "running" | "completed" | "failed" | "blocked";
@@ -17,14 +18,17 @@ export interface FollowUpContext {
   priorRisks: string[];
 }
 
+export interface SessionMetadata {
+  followUpSessionId?: SessionId;
+  followUpContext?: FollowUpContext;
+  [key: string]: unknown;
+}
+
 export interface SessionInput {
   cwd: string;
   task: string;
   interactive?: boolean;
-  metadata?: {
-    followUpContext?: FollowUpContext;
-    [key: string]: unknown;
-  };
+  metadata?: SessionMetadata;
 }
 
 export interface TurnInput {
@@ -67,6 +71,7 @@ export interface TurnRuntimeState {
   plan?: TurnPlan;
   steps: StepRuntimeState[];
   summary?: string;
+  report?: TurnReport;
 }
 
 export interface SessionRuntimeState {
@@ -77,5 +82,7 @@ export interface SessionRuntimeState {
   startedAt: Timestamp;
   endedAt?: Timestamp;
   turns: TurnRuntimeState[];
-  metadata?: Record<string, unknown>;
+  interactive?: boolean;
+  metadata?: SessionMetadata;
+  gitSnapshotBefore?: GitWorkingTreeSnapshot;
 }

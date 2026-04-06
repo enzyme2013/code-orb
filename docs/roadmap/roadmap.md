@@ -67,12 +67,24 @@ Release detail: [releases/0.3.0.md](./releases/0.3.0.md)
 
 Current status:
 
-- planned
+- released on 2026-04-06
 
 Release detail: [releases/0.4.0.md](./releases/0.4.0.md)
 - todo: [releases/0.4.0-todo.md](./releases/0.4.0-todo.md)
 
-### 0.5.0 Extensibility
+### 0.5.0 Interactive CLI
+
+- move from one-shot `orb run` toward a persistent interactive CLI session
+- support multiple turns within one local foreground session
+- establish the minimal interactive command surface and session UX needed for iterative coding work
+
+Current status:
+
+- implemented
+
+Release detail: [releases/0.5.0.md](./releases/0.5.0.md)
+
+### 0.6.0 Extensibility
 
 - provider abstraction maturity
 - external tool registration boundaries

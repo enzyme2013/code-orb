@@ -2,9 +2,11 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
 import { buildFollowUpContext } from "@code-orb/core";
+import type { SessionInput, SessionRuntimeState, TurnInput } from "@code-orb/schemas";
 import type { StoredSessionArtifact } from "@code-orb/core";
 
 import { getCliUsage, parseCliArgs } from "./commands/run.js";
+import { loadEnvFiles } from "./runtime/load-env-file.js";
 import { createCliRuntime } from "./runtime/create-cli-runtime.js";
 
 export interface CliIO {
@@ -16,6 +18,7 @@ export interface CliIO {
   };
   cwd(): string;
   confirm?(message: string): Promise<boolean>;
+  prompt?(message: string): Promise<string | null>;
 }
 
 export const nodeCliIO: CliIO = {
@@ -45,10 +48,24 @@ export const nodeCliIO: CliIO = {
       rl.close();
     }
   },
+  prompt: async (message: string) => {
+    if (!stdin.isTTY || !stdout.isTTY) {
+      return null;
+    }
+
+    const rl = createInterface({ input: stdin, output: stdout });
+    try {
+      const answer = await rl.question(message);
+      return answer;
+    } finally {
+      rl.close();
+    }
+  },
 };
 
 export async function main(args: string[] = process.argv.slice(2), io: CliIO = nodeCliIO): Promise<number> {
   const parsed = parseCliArgs(args, io.cwd());
+  loadEnvFiles(parsed.command === "invalid" ? io.cwd() : getCommandCwd(parsed, io.cwd()), process.env);
 
   if (parsed.command === "help") {
     io.stdout.write(parsed.usage);
@@ -81,6 +98,10 @@ export async function main(args: string[] = process.argv.slice(2), io: CliIO = n
       return 0;
     }
 
+    if (parsed.command === "chat") {
+      return await runInteractiveSession(parsed.sessionInput, runtime.runner, runtime.context, io);
+    }
+
     if (parsed.command === "run") {
       const followUpSessionId =
         typeof parsed.sessionInput.metadata?.followUpSessionId === "string"
@@ -107,6 +128,114 @@ export async function main(args: string[] = process.argv.slice(2), io: CliIO = n
   } catch (error) {
     io.stderr.write(`Code Orb failed: ${error instanceof Error ? error.message : "Unknown error"}\n`);
     return 1;
+  }
+}
+
+async function runInteractiveSession(
+  sessionInput: SessionInput,
+  runner: ReturnType<typeof createCliRuntime>["runner"],
+  context: ReturnType<typeof createCliRuntime>["context"],
+  io: CliIO,
+): Promise<number> {
+  if (!io.prompt) {
+    io.stderr.write("Interactive mode requires prompt-capable CLI IO.\n");
+    return 1;
+  }
+
+  const session = runner.createSession(sessionInput);
+  io.stdout.write("Interactive session started. Type /help for commands.\n");
+
+  let finalReportProduced = false;
+
+  try {
+    while (true) {
+      const answer = await io.prompt("orb> ");
+
+      if (answer === null) {
+        io.stdout.write("Interactive session ended: end of input.\n");
+        break;
+      }
+
+      const input = answer.trim();
+      if (!input) {
+        continue;
+      }
+
+      if (input === "/help") {
+        io.stdout.write(formatInteractiveHelp());
+        continue;
+      }
+
+      if (input === "/status") {
+        io.stdout.write(formatInteractiveStatus(session));
+        continue;
+      }
+
+      if (isExitCommand(input)) {
+        io.stdout.write("Interactive session exiting.\n");
+        break;
+      }
+
+      await runner.runTurn(session, createInteractiveTurnInput(input), context);
+    }
+
+    await runner.completeSession(session, context);
+    return 0;
+  } catch (error) {
+    if (!finalReportProduced) {
+      await runner.failSession(session, context, error);
+    }
+
+    io.stderr.write(`Code Orb failed: ${error instanceof Error ? error.message : "Unknown error"}\n`);
+    return 1;
+  }
+}
+
+function createInteractiveTurnInput(content: string): TurnInput {
+  return {
+    content,
+    source: "user",
+  };
+}
+
+function formatInteractiveHelp(): string {
+  return [
+    "Interactive commands:\n",
+    "/help   Show interactive help\n",
+    "/status Show current session status\n",
+    "/exit   Save the session and exit\n",
+    "exit    Alias for /exit\n",
+    "quit    Alias for /exit\n",
+  ].join("");
+}
+
+function isExitCommand(input: string): boolean {
+  return input === "/exit" || input === "/quit" || input === "exit" || input === "quit";
+}
+
+function formatInteractiveStatus(session: SessionRuntimeState): string {
+  const lastTurn = session.turns.at(-1)?.report;
+
+  return [
+    `Session: ${session.id}\n`,
+    `Mode: ${session.interactive ? "interactive" : "one-shot"}\n`,
+    `Turns: ${session.turns.length}\n`,
+    `Status: ${session.status}\n`,
+    `Task: ${session.task}\n`,
+    `Last turn: ${lastTurn?.summary ?? "none"}\n`,
+  ].join("");
+}
+
+function getCommandCwd(parsed: ReturnType<typeof parseCliArgs>, fallbackCwd: string): string {
+  switch (parsed.command) {
+    case "run":
+    case "chat":
+      return parsed.sessionInput.cwd;
+    case "sessions_list":
+    case "sessions_show":
+      return parsed.cwd;
+    default:
+      return fallbackCwd;
   }
 }
 

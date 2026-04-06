@@ -383,4 +383,80 @@ describe("BasicSessionRunner", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("supports multiple turns within one interactive session and persists one artifact", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+    const modelClient = new FakeModelClient("Create a short execution summary.");
+
+    try {
+      const runner = new BasicSessionRunner();
+      const session = runner.createSession({
+        cwd,
+        task: "Interactive CLI session",
+        interactive: true,
+      });
+
+      const firstTurn = await runner.runTurn(
+        session,
+        {
+          content: "summarize the next action",
+          source: "user",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new NoopToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient,
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      const secondTurn = await runner.runTurn(
+        session,
+        {
+          content: "continue the prior work",
+          source: "user",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new NoopToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient,
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      const report = await runner.completeSession(session, {
+        eventSink,
+        agentEngine: new BasicAgentEngine(),
+        toolExecutor: new NoopToolExecutor(),
+        policyEngine: new AllowAllPolicyEngine(),
+        approvalResolver: new AutoApproveResolver(),
+        modelClient,
+        gitStateReader: new LocalGitStateReader(),
+        sessionStore,
+      });
+
+      expect(firstTurn.summary).toBe("Create a short execution summary.");
+      expect(secondTurn.summary).toBe("Create a short execution summary.");
+      expect(report.turnReports).toHaveLength(2);
+      expect(report.outcome).toBe("completed");
+
+      const artifacts = await sessionStore.list(cwd);
+      expect(artifacts).toHaveLength(1);
+      expect(artifacts[0]?.turnReports).toHaveLength(2);
+      expect(modelClient.requests).toHaveLength(2);
+      expect(modelClient.requests[1]?.messages.some((message) => String(message.content).includes(`prior session ${session.id}`))).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });

@@ -1,7 +1,7 @@
 {
   "name": "code-orb",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CLI-first coding agent with a future desktop path.",
   "license": "UNLICENSED",
   "scripts": {
@@ -10,6 +10,7 @@
     "benchmark:approval-denied": "node --import tsx scripts/run-approval-denied-benchmark.ts",
     "benchmark:existing-changes-awareness": "CODE_ORB_AUTO_APPROVE=1 node --import tsx scripts/run-existing-changes-awareness-benchmark.ts",
     "benchmark:failing-test-fix": "CODE_ORB_AUTO_APPROVE=1 node --import tsx scripts/run-failing-test-fix-benchmark.ts",
+    "benchmark:interactive-multi-turn": "CODE_ORB_AUTO_APPROVE=1 node --import tsx scripts/run-interactive-multi-turn-benchmark.ts",
     "benchmark:session-follow-up": "CODE_ORB_AUTO_APPROVE=1 node --import tsx scripts/run-session-follow-up-benchmark.ts",
     "benchmark:verification-still-fails": "CODE_ORB_AUTO_APPROVE=1 node --import tsx scripts/run-verification-still-fails-benchmark.ts",
     "test": "vitest run",
