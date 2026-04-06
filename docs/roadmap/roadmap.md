@@ -65,6 +65,13 @@ Release detail: [releases/0.3.0.md](./releases/0.3.0.md)
 - git-aware safety and diff helpers
 - resume-oriented artifacts
 
+Current status:
+
+- planned
+
+Release detail: [releases/0.4.0.md](./releases/0.4.0.md)
+- todo: [releases/0.4.0-todo.md](./releases/0.4.0-todo.md)
+
 ### 0.5.0 Extensibility
 
 - provider abstraction maturity
