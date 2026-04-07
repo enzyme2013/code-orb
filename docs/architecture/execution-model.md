@@ -158,5 +158,6 @@ Specifically:
 - `/help`, `/status`, and `/exit` are handled by the CLI shell layer as interactive control commands
 - the session persists one final artifact containing all turn reports when the interactive session exits
 - same-session follow-up requests can reference the previous turn through session-scoped context instead of using `--from-session`
+- for explicit file-writing requests, the agent engine may translate assistant-generated code blocks into auditable repository writes through the tool executor instead of stopping at a conversational summary
 
 This extends the CLI from one-shot commands to multi-turn foreground interaction without introducing daemon mode or changing the core runtime boundaries.

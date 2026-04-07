@@ -39,7 +39,10 @@ export class BasicAgentEngine implements AgentEngine {
     this.completeStep(turn, planningStep.id);
 
     const execution =
-      (await this.tryExecuteFailingTestFixTask(turn, context)) ?? (await this.tryExecuteReplaceAndVerifyTask(turn, context));
+      (await this.tryExecuteFailingTestFixTask(turn, context)) ??
+      (await this.tryExecuteReplaceAndVerifyTask(turn, context)) ??
+      (await this.tryExecuteGeneratedFileWriteTask(turn, context, plan.summary)) ??
+      {};
     const validations = execution.validation ? [execution.validation] : undefined;
     const filesChanged = execution.changedFile ? [execution.changedFile] : undefined;
     const risks =
@@ -118,6 +121,20 @@ export class BasicAgentEngine implements AgentEngine {
 
     const summary = response.content.trim() || `Handled turn: ${turn.input.content}`;
 
+    context.eventSink.emit({
+      id: createRuntimeId("evt"),
+      sessionId: turn.sessionId,
+      turnId: turn.id,
+      type: "assistant.message",
+      timestamp: createTimestamp(),
+      payload: {
+        content: summary,
+        profile: context.defaultProfile,
+        provider: response.provider,
+        model: response.model,
+      },
+    });
+
     return {
       summary,
       items: [
@@ -145,17 +162,20 @@ export class BasicAgentEngine implements AgentEngine {
   private async tryExecuteReplaceAndVerifyTask(
     turn: TurnRuntimeState,
     context: AgentExecutionContext,
-  ): Promise<{
-    summary?: string;
-    changedFile?: string;
-    validation?: ValidationResult;
-    outcome?: TurnReport["outcome"];
-    risks?: string[];
-  }> {
+  ): Promise<
+    | {
+        summary?: string;
+        changedFile?: string;
+        validation?: ValidationResult;
+        outcome?: TurnReport["outcome"];
+        risks?: string[];
+      }
+    | undefined
+  > {
     const parsed = parseReplaceAndVerifyTask(turn.input.content);
 
     if (!parsed) {
-      return {};
+      return undefined;
     }
 
     const inspectStep = await this.startStep(turn, "context", context);
@@ -286,6 +306,66 @@ export class BasicAgentEngine implements AgentEngine {
       summary: `Updated ${targetMatch.path} and ran verification`,
       changedFile: targetMatch.path,
       validation,
+    };
+  }
+
+  private async tryExecuteGeneratedFileWriteTask(
+    turn: TurnRuntimeState,
+    context: AgentExecutionContext,
+    assistantResponse: string,
+  ): Promise<
+    | {
+        summary?: string;
+        changedFile?: string;
+        validation?: ValidationResult;
+        outcome?: TurnReport["outcome"];
+        risks?: string[];
+      }
+    | undefined
+  > {
+    const parsed = parseGeneratedFileWriteTask(turn.input.content, assistantResponse);
+
+    if (!parsed) {
+      return undefined;
+    }
+
+    const editStep = await this.startStep(turn, "tool_use", context);
+    const editResult = await this.executeToolResult(turn, editStep, context, "apply_patch", {
+      path: parsed.path,
+      searchText: "",
+      replaceText: parsed.content,
+    });
+    this.completeStep(turn, editStep.id);
+
+    const editFailure = classifyToolFailure("apply_patch", editResult);
+    if (editFailure) {
+      return {
+        summary: editFailure.summary,
+        changedFile: parsed.path,
+        outcome: editFailure.outcome,
+        risks: editFailure.risks,
+      };
+    }
+
+    if (!parsed.verifyCommand) {
+      return {
+        summary: `Wrote ${parsed.path} from assistant-generated content`,
+        changedFile: parsed.path,
+      };
+    }
+
+    const verifyStep = await this.startStep(turn, "verification", context);
+    const verify = await this.runVerification(turn, verifyStep, context, parsed.verifyCommand);
+
+    return {
+      summary:
+        verify.validation.status === "passed"
+          ? `Wrote ${parsed.path} and ran verification`
+          : `Wrote ${parsed.path}, but verification still failed.`,
+      changedFile: parsed.path,
+      validation: verify.validation,
+      outcome: verify.validation.status === "failed" ? "failed" : undefined,
+      risks: verify.validation.status === "failed" ? ["Verification failed after the file was written."] : [],
     };
   }
 
@@ -583,13 +663,38 @@ function parseReplaceAndVerifyTask(task: string): { searchText: string; replaceT
     return null;
   }
 
-  const verifyMatch = task.match(/run\s+"([^"]+)"/i);
-  const bareVerifyMatch = task.match(/\b(?:run|rerun|then run)\s+(node [a-zA-Z0-9./_-]+(?:\s+[a-zA-Z0-9./_-]+)*)/i);
-
   return {
     searchText: replaceMatch[1] ?? "",
     replaceText: replaceMatch[2] ?? "",
-    verifyCommand: verifyMatch?.[1] ?? bareVerifyMatch?.[1],
+    verifyCommand: extractVerifyCommand(task),
+  };
+}
+
+function parseGeneratedFileWriteTask(
+  task: string,
+  assistantResponse: string,
+): { path: string; content: string; verifyCommand?: string } | null {
+  if (!looksLikeFileWriteTask(task)) {
+    return null;
+  }
+
+  const codeBlock = extractCodeBlock(assistantResponse);
+  if (!codeBlock) {
+    return null;
+  }
+
+  const path =
+    extractRequestedPath(task) ??
+    extractSuggestedPathFromAssistantResponse(assistantResponse) ??
+    inferGeneratedFilePath(task, codeBlock.language);
+  if (!path) {
+    return null;
+  }
+
+  return {
+    path,
+    content: ensureTrailingNewline(codeBlock.content),
+    verifyCommand: extractVerifyCommand(task),
   };
 }
 
@@ -609,6 +714,97 @@ function parseFailingTestFixTask(task: string): { verifyCommand: string } | null
   return {
     verifyCommand: nodeCommand ?? "node verify.mjs",
   };
+}
+
+function extractVerifyCommand(task: string): string | undefined {
+  const verifyMatch = task.match(/run\s+"([^"]+)"/i);
+  const bareVerifyMatch = task.match(
+    /\b(?:run|rerun|then run)\s+((?:node|pnpm|npm|bash|sh)\s+[a-zA-Z0-9./_:-]+(?:\s+[a-zA-Z0-9./_:-]+)*)/i,
+  );
+
+  return verifyMatch?.[1] ?? bareVerifyMatch?.[1];
+}
+
+function looksLikeFileWriteTask(task: string): boolean {
+  const normalizedTask = task.toLowerCase();
+  const hasFileTarget =
+    /\b(file|script|shell script|bash script|readme|config)\b/i.test(task) ||
+    /\b[a-zA-Z0-9_./-]+\.(?:sh|bash|zsh|js|ts|mjs|cjs|py|md|txt|json|ya?ml)\b/.test(task) ||
+    /(?:文件|脚本|配置|README)/i.test(task);
+  const hasWriteIntent =
+    /(create|write|add|make|generate|new|update|modify|rewrite|overwrite|replace contents of)\b/i.test(task) ||
+    /(?:写|创建|新建|生成|修改|重写|覆盖|更新)/.test(task);
+
+  if (!hasFileTarget || !hasWriteIntent) {
+    return false;
+  }
+
+  if (/replace\s+"[^"]+"\s+with\s+"[^"]+"/i.test(task) || /replacing\s+"[^"]+"\s+with\s+"[^"]+"/i.test(task)) {
+    return false;
+  }
+
+  if (normalizedTask.includes("failing test")) {
+    return false;
+  }
+
+  return true;
+}
+
+function extractRequestedPath(task: string): string | undefined {
+  return extractPathCandidate(task);
+}
+
+function extractSuggestedPathFromAssistantResponse(assistantResponse: string): string | undefined {
+  const saveAsMatch =
+    assistantResponse.match(/(?:save(?: it)? as|saved as|保存为)\s*["'`]?([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)["'`]?/i)?.[1] ??
+    assistantResponse.match(/["'`]([a-zA-Z0-9_./-]+\.(?:sh|bash|zsh|js|ts|mjs|cjs|py|md|txt|json|ya?ml))["'`]/)?.[1];
+
+  return saveAsMatch ?? extractPathCandidate(assistantResponse);
+}
+
+function extractPathCandidate(content: string): string | undefined {
+  const quotedPath =
+    content.match(/["'`]([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)["'`]/)?.[1] ??
+    content.match(/[“]([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)[”]/)?.[1];
+
+  if (quotedPath) {
+    return quotedPath;
+  }
+
+  return content.match(/\b[a-zA-Z0-9_./-]+\.(?:sh|bash|zsh|js|ts|mjs|cjs|py|md|txt|json|ya?ml)\b/)?.[0];
+}
+
+function inferGeneratedFilePath(task: string, language: string | undefined): string | undefined {
+  if (/\.(sh|bash|zsh)\b/i.test(task) || /(shell script|bash script|\bsh\b)/i.test(task) || /脚本/.test(task)) {
+    if (/(disk|drive|storage|space|硬盘|磁盘)/i.test(task) && /(free|remaining|剩余|可用)/i.test(task)) {
+      return "show-disk-space.sh";
+    }
+
+    return "script.sh";
+  }
+
+  if (language === "sh" || language === "bash" || language === "zsh") {
+    return "script.sh";
+  }
+
+  return undefined;
+}
+
+function extractCodeBlock(content: string): { language?: string; content: string } | null {
+  const match = content.match(/```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/);
+
+  if (!match || !(match[2] ?? "").trim()) {
+    return null;
+  }
+
+  return {
+    language: match[1]?.trim().toLowerCase(),
+    content: match[2].replace(/\n+$/, ""),
+  };
+}
+
+function ensureTrailingNewline(content: string): string {
+  return content.endsWith("\n") ? content : `${content}\n`;
 }
 
 function combineCommandOutput(output: { stdout?: string; stderr?: string }): string {

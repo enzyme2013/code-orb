@@ -15,6 +15,42 @@ afterEach(async () => {
 });
 
 describe("BasicToolExecutor", () => {
+  it("creates a new file when apply_patch is given an empty search text", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-tool-executor-"));
+    tempDirs.push(cwd);
+
+    const executor = new BasicToolExecutor();
+    const outcome = await executor.execute(
+      {
+        id: "call_create",
+        sessionId: "ses_test",
+        turnId: "turn_test",
+        stepId: "step_test",
+        toolName: "apply_patch",
+        input: {
+          path: "scripts/show-disk-space.sh",
+          searchText: "",
+          replaceText: "#!/bin/sh\ndf -h /\n",
+        },
+        requestedAt: new Date().toISOString(),
+      },
+      {
+        cwd,
+        eventSink: new MemoryEventSink(),
+        policyEngine: new AllowAllPolicyEngine(),
+        approvalResolver: new AutoApproveResolver(),
+      },
+    );
+
+    expect(outcome.result.status).toBe("success");
+    expect(outcome.result.output).toEqual({
+      path: "scripts/show-disk-space.sh",
+      replaced: true,
+      created: true,
+    });
+    expect(await readFile(join(cwd, "scripts", "show-disk-space.sh"), "utf8")).toBe("#!/bin/sh\ndf -h /\n");
+  });
+
   it("classifies apply_patch target-not-found failures", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "code-orb-tool-executor-"));
     tempDirs.push(cwd);

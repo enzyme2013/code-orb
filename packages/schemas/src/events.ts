@@ -9,6 +9,7 @@ export type RuntimeEventType =
   | "session.started"
   | "turn.started"
   | "step.started"
+  | "assistant.message"
   | "plan.generated"
   | "tool.started"
   | "tool.finished"
@@ -50,6 +51,16 @@ export type StepStartedEvent = RuntimeEventEnvelope<
   {
     index: number;
     kind: string;
+  }
+>;
+
+export type AssistantMessageEvent = RuntimeEventEnvelope<
+  "assistant.message",
+  {
+    content: string;
+    profile?: ModelProfile;
+    provider?: string;
+    model?: string;
   }
 >;
 
@@ -124,6 +135,7 @@ export type RuntimeEvent =
   | SessionStartedEvent
   | TurnStartedEvent
   | StepStartedEvent
+  | AssistantMessageEvent
   | PlanGeneratedEvent
   | ToolStartedEvent
   | ToolFinishedEvent

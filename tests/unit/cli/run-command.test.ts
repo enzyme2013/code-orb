@@ -177,6 +177,7 @@ describe("orb run command contract", () => {
       expect(exitCode).toBe(0);
       expect(stderr).toEqual([]);
       expect(stdout.join("")).toContain("Session started:");
+      expect(stdout.join("")).toContain("Assistant: Planned task: summarize the next action");
       expect(stdout.join("")).toContain("Plan: Planned task: summarize the next action");
       expect(stdout.join("")).toContain("Session complete:");
       expect(stdout.join("")).toContain("Repository dirty before run: no");
@@ -202,6 +203,7 @@ describe("orb run command contract", () => {
       expect(output).toContain("Interactive session started. Type /help for commands.");
       expect(output).toContain("Interactive commands:");
       expect(output).toContain("Turn 1: summarize the next action");
+      expect(output).toContain("Assistant: Planned task: summarize the next action");
       expect(output).toContain("Session:");
       expect(output).toContain("Mode: interactive");
       expect(output).toContain("Turns: 1");

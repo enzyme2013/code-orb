@@ -25,6 +25,7 @@ Every event should conceptually include:
 ## Initial Event Families
 
 - `session.*`
+- `assistant.*`
 - `plan.*`
 - `tool.*`
 - `edit.*`
@@ -55,6 +56,7 @@ The minimum useful event set for V0 is:
 - `session.started`
 - `turn.started`
 - `step.started`
+- `assistant.message`
 - `plan.generated`
 - `tool.started`
 - `tool.finished`

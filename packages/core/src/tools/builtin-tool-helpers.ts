@@ -1,5 +1,5 @@
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, relative, resolve, sep } from "node:path";
 
 export interface SearchMatch {
   path: string;
@@ -105,7 +105,7 @@ export async function replaceInRepositoryFile(
   targetPath: string,
   searchText: string,
   replaceText: string,
-): Promise<{ path: string; replaced: boolean }> {
+): Promise<{ path: string; replaced: boolean; created?: boolean }> {
   const absolutePath = resolveRepoPath(cwd, targetPath);
 
   if (!isPathWithinCwd(cwd, absolutePath)) {
@@ -114,7 +114,40 @@ export async function replaceInRepositoryFile(
     });
   }
 
-  const content = await readFile(absolutePath, "utf8");
+  let content: string;
+
+  try {
+    content = await readFile(absolutePath, "utf8");
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      if (searchText !== "") {
+        throw new BuiltinToolError(`Search text not found in ${targetPath}`, "edit_target_not_found", {
+          path: targetPath,
+          searchText,
+        });
+      }
+
+      await mkdir(dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, replaceText, "utf8");
+
+      return {
+        path: targetPath,
+        replaced: true,
+        created: true,
+      };
+    }
+
+    throw error;
+  }
+
+  if (searchText === "") {
+    await writeFile(absolutePath, replaceText, "utf8");
+
+    return {
+      path: targetPath,
+      replaced: replaceText !== content,
+    };
+  }
 
   if (!content.includes(searchText)) {
     throw new BuiltinToolError(`Search text not found in ${targetPath}`, "edit_target_not_found", {
@@ -130,4 +163,8 @@ export async function replaceInRepositoryFile(
     path: targetPath,
     replaced: updated !== content,
   };
+}
+
+function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
 }

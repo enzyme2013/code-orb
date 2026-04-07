@@ -56,6 +56,7 @@ describe("BasicSessionRunner", () => {
         "session.started",
         "turn.started",
         "step.started",
+        "assistant.message",
         "plan.generated",
         "turn.completed",
         "session.completed",
@@ -455,6 +456,163 @@ describe("BasicSessionRunner", () => {
       expect(artifacts[0]?.turnReports).toHaveLength(2);
       expect(modelClient.requests).toHaveLength(2);
       expect(modelClient.requests[1]?.messages.some((message) => String(message.content).includes(`prior session ${session.id}`))).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("creates a shell script file from assistant-generated code when the task asks for a new script", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+
+    try {
+      const runner = new BasicSessionRunner();
+      const report = await runner.run(
+        {
+          cwd,
+          task: "写一个脚本，显示我的硬盘剩余空间。",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new FakeModelClient(
+            [
+              "我会写一个 shell 脚本来显示磁盘剩余空间：",
+              "```sh",
+              "#!/bin/sh",
+              "df -h /",
+              "```",
+            ].join("\n"),
+          ),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      const { readFile } = await import("node:fs/promises");
+      const scriptContent = await readFile(join(cwd, "show-disk-space.sh"), "utf8");
+
+      expect(report.outcome).toBe("completed");
+      expect(report.turnReports[0]?.filesChanged).toEqual(["show-disk-space.sh"]);
+      expect(report.turnReports[0]?.summary).toBe("Wrote show-disk-space.sh from assistant-generated content");
+      expect(scriptContent).toBe("#!/bin/sh\ndf -h /\n");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("writes the assistant-suggested shell script filename for the Chinese disk-space request", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+
+    try {
+      const runner = new BasicSessionRunner();
+      const report = await runner.run(
+        {
+          cwd,
+          task: "我想写一个 shell脚本,查看硬盘的可用空间",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new FakeModelClient(
+            [
+              "可以，给你一个简单实用的 Shell 脚本，用来查看硬盘可用空间（按人类可读格式显示）：",
+              "",
+              "```bash",
+              "#!/bin/bash",
+              "",
+              "echo \"=== 磁盘空间使用情况 ===\"",
+              "df -h",
+              "",
+              "echo",
+              "echo \"=== 各挂载点可用空间（Available） ===\"",
+              "df -h | awk 'NR==1 || NR>1 {print $1, $6, $4}'",
+              "```",
+              "",
+              "### 使用方法",
+              "1. 保存为 `check_disk.sh`",
+              "2. 赋予执行权限：",
+              "   ```bash",
+              "   chmod +x check_disk.sh",
+              "   ```",
+              "3. 运行：",
+              "   ```bash",
+              "   ./check_disk.sh",
+              "   ```",
+              "",
+              "如果你想只看根分区 `/` 的可用空间，也可以再改。",
+            ].join("\n"),
+          ),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      const { readFile } = await import("node:fs/promises");
+      const scriptContent = await readFile(join(cwd, "check_disk.sh"), "utf8");
+
+      expect(report.outcome).toBe("completed");
+      expect(report.turnReports[0]?.filesChanged).toEqual(["check_disk.sh"]);
+      expect(report.turnReports[0]?.summary).toBe("Wrote check_disk.sh from assistant-generated content");
+      expect(scriptContent).toContain("#!/bin/bash");
+      expect(scriptContent).toContain('echo "=== 磁盘空间使用情况 ==="');
+      expect(scriptContent).toContain("df -h");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("rewrites an existing file from assistant-generated content when the task explicitly targets that file", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+
+    try {
+      const { writeFile, readFile } = await import("node:fs/promises");
+      await writeFile(join(cwd, "README.md"), "old content\n", "utf8");
+
+      const runner = new BasicSessionRunner();
+      const report = await runner.run(
+        {
+          cwd,
+          task: "Rewrite README.md so it briefly explains this repository.",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new FakeModelClient(
+            [
+              "Here is the updated README:",
+              "```md",
+              "# Code Orb",
+              "",
+              "Code Orb is a CLI-first coding agent for local repositories.",
+              "```",
+            ].join("\n"),
+          ),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      const readme = await readFile(join(cwd, "README.md"), "utf8");
+
+      expect(report.outcome).toBe("completed");
+      expect(report.turnReports[0]?.filesChanged).toEqual(["README.md"]);
+      expect(report.turnReports[0]?.summary).toBe("Wrote README.md from assistant-generated content");
+      expect(readme).toBe("# Code Orb\n\nCode Orb is a CLI-first coding agent for local repositories.\n");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

@@ -52,4 +52,155 @@ describe("OpenAIResponsesModelClient", () => {
     expect(response.content).toBe("hello from provider");
     expect(response.usage?.totalTokens).toBe(18);
   });
+
+  it("accepts a top-level output_text field from compatible responses APIs", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "resp_compat",
+        output_text: "pong",
+      }),
+    } as Response);
+
+    const client = new OpenAIResponsesModelClient({
+      apiKey: "test-key",
+      model: "gpt-test",
+      baseUrl: "https://example.com/v1",
+      fetchImpl,
+    });
+
+    const response = await client.complete({
+      sessionId: "ses_1",
+      turnId: "turn_1",
+      profile: "default",
+      messages: [
+        {
+          role: "user",
+          content: "reply with pong",
+        },
+      ],
+    });
+
+    expect(response.content).toBe("pong");
+  });
+
+  it("falls back to chat-completions style choices when a compatible gateway returns them", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "resp_choices",
+        choices: [
+          {
+            message: {
+              content: "hello from choices",
+            },
+          },
+        ],
+      }),
+    } as Response);
+
+    const client = new OpenAIResponsesModelClient({
+      apiKey: "test-key",
+      model: "gpt-test",
+      baseUrl: "https://example.com/v1",
+      fetchImpl,
+    });
+
+    const response = await client.complete({
+      sessionId: "ses_1",
+      turnId: "turn_1",
+      profile: "default",
+      messages: [
+        {
+          role: "user",
+          content: "say hello",
+        },
+      ],
+    });
+
+    expect(response.content).toBe("hello from choices");
+  });
+
+  it("throws a clear error when the provider returns no assistant content", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "resp_empty",
+        output: [],
+      }),
+    } as Response);
+
+    const client = new OpenAIResponsesModelClient({
+      apiKey: "test-key",
+      model: "gpt-test",
+      baseUrl: "https://example.com/v1",
+      fetchImpl,
+    });
+
+    await expect(
+      client.complete({
+        sessionId: "ses_1",
+        turnId: "turn_1",
+        profile: "default",
+        messages: [
+          {
+            role: "user",
+            content: "say hello",
+          },
+        ],
+      }),
+    ).rejects.toThrow("OpenAI-compatible provider returned no assistant content for model gpt-test.");
+  });
+
+  it("falls back to streaming responses when the non-streaming payload has no assistant content", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "resp_empty",
+          output: [],
+        }),
+      } as Response)
+      .mockResolvedValueOnce(
+        new Response(
+          [
+            "event: response.output_text.delta",
+            'data: {"type":"response.output_text.delta","delta":"pong"}',
+            "",
+            "event: response.output_text.done",
+            'data: {"type":"response.output_text.done","text":"pong"}',
+            "",
+          ].join("\n"),
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream",
+            },
+          },
+        ),
+      );
+
+    const client = new OpenAIResponsesModelClient({
+      apiKey: "test-key",
+      model: "gpt-test",
+      baseUrl: "https://example.com/v1",
+      fetchImpl,
+    });
+
+    const response = await client.complete({
+      sessionId: "ses_1",
+      turnId: "turn_1",
+      profile: "default",
+      messages: [
+        {
+          role: "user",
+          content: "reply with pong",
+        },
+      ],
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(response.content).toBe("pong");
+  });
 });

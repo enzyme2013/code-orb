@@ -28,6 +28,8 @@ export class TerminalEventRenderer {
         return `Turn ${event.payload.index + 1}: ${event.payload.input}\n`;
       case "step.started":
         return `Step ${event.payload.index + 1}: ${event.payload.kind}\n`;
+      case "assistant.message":
+        return `Assistant: ${event.payload.content}\n`;
       case "plan.generated":
         return `Plan: ${event.payload.plan.summary}\n`;
       case "tool.started":

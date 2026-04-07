@@ -30,6 +30,7 @@ This means a tool is not just a function pointer. A tool is a contract plus runt
 - Side-effecting tools should return enough metadata to support audit trails.
 - Tool calls should be visible in the session event stream.
 - Tools should do one thing well instead of exposing large ambiguous surfaces.
+- file-editing tools may create a new repository file when the request is explicit and auditable rather than inferring hidden side effects
 
 ## Boundary
 
