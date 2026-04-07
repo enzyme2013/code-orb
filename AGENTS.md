@@ -15,6 +15,7 @@ Code Orb is being built as a CLI-first coding agent for local repositories, with
 - System design lives under `docs/architecture/`.
 - durable decision records live under `docs/adr/`.
 - release sequencing lives under `docs/roadmap/`.
+- engineering workflow and release practices live under `docs/engineering/`, including `docs/engineering/release-workflow.md`.
 - reference material and agent-authored analysis live under `docs/reference/`.
 
 Do not introduce parallel rulebooks in random markdown files. If a new rule affects all contributors or all coding agents, put it here or link to the right document from here.

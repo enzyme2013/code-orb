@@ -1,5 +1,7 @@
 # Release Process
 
+For the full milestone planning and execution workflow, see [release-workflow.md](./release-workflow.md).
+
 ## Versioning
 
 The project follows Semantic Versioning once public releases begin. Until then, `0.0.x` can be used for internal bootstrap checkpoints.
