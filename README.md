@@ -18,7 +18,7 @@ Release status:
 
 - `0.4.0` Session And Git Awareness: released
 - `0.5.0` Interactive CLI: released on 2026-04-08
-- `0.6.0` Extensibility: planned
+- `0.6.0` Extensibility: released on 2026-04-08
 - `0.7.0` Query Loop And Tool Runtime: planned
 - `0.8.0` Usable CLI: planned
 

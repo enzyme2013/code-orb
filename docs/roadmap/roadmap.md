@@ -97,7 +97,7 @@ Release detail: [releases/0.5.0.md](./releases/0.5.0.md)
 
 Current status:
 
-- planned
+- released on 2026-04-08
 
 Release detail: [releases/0.6.0.md](./releases/0.6.0.md)
 
