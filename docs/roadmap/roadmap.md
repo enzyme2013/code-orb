@@ -80,8 +80,9 @@ Release detail: [releases/0.4.0.md](./releases/0.4.0.md)
 
 Current status:
 
-- implemented on 2026-04-06
-- critical post-release usability fixes landed on 2026-04-08 to restore assistant reply rendering, provider reply recovery, and basic single-file generated writes inside `orb chat`
+- released on 2026-04-08
+- initial interactive shell and session model landed on 2026-04-06
+- release-closeout usability fixes landed on 2026-04-08 to restore assistant reply rendering, provider reply recovery, and basic single-file generated writes inside `orb chat`
 
 Release detail: [releases/0.5.0.md](./releases/0.5.0.md)
 
