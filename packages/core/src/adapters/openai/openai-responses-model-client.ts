@@ -1,4 +1,10 @@
-import type { ModelMessage, ModelRequest, ModelResponse, ProviderCapabilities } from "@code-orb/schemas";
+import type {
+  ModelMessage,
+  ModelRequest,
+  ModelResponse,
+  ProviderCapabilities,
+  ProviderCompatibility,
+} from "@code-orb/schemas";
 
 import type { ModelClient } from "../ports/model-client.js";
 
@@ -41,6 +47,12 @@ interface OpenAIResponsesApiResponse {
   };
 }
 
+interface ExtractedCompatibilityResponse {
+  content: string;
+  compatibility?: ProviderCompatibility;
+  errorMessage?: string;
+}
+
 export class OpenAIResponsesModelClient implements ModelClient {
   readonly provider = "openai";
   readonly capabilities: ProviderCapabilities = {
@@ -80,15 +92,31 @@ export class OpenAIResponsesModelClient implements ModelClient {
     }
 
     const body = (await response.json()) as OpenAIResponsesApiResponse;
-    let content = this.extractText(body);
+    const extracted = this.extractText(body);
+
+    if (extracted.errorMessage) {
+      throw new Error(
+        `OpenAI-compatible provider returned an error payload for model ${this.options.model}: ${extracted.errorMessage}`,
+      );
+    }
+
+    let content = extracted.content;
+    let compatibility = extracted.compatibility;
 
     if (!content.trim()) {
       content = await this.completeViaStreamingFallback(requestBody);
+      if (content.trim()) {
+        compatibility = {
+          status: "degraded",
+          path: "responses_streaming_fallback",
+          notes: ["Recovered assistant content through streaming fallback after an empty non-streaming response."],
+        };
+      }
     }
 
     if (!content.trim()) {
       throw new Error(
-        `OpenAI-compatible provider returned no assistant content for model ${this.options.model}.`,
+        `OpenAI-compatible provider returned no assistant content for model ${this.options.model} after non-streaming normalization and streaming fallback.`,
       );
     }
 
@@ -97,6 +125,7 @@ export class OpenAIResponsesModelClient implements ModelClient {
       model: this.options.model,
       profile: request.profile,
       content,
+      compatibility,
       finishReason: "stop",
       usage: {
         inputTokens: body.usage?.input_tokens,
@@ -105,6 +134,8 @@ export class OpenAIResponsesModelClient implements ModelClient {
       },
       raw: {
         id: body.id,
+        compatibilityPath: compatibility?.path,
+        compatibilityStatus: compatibility?.status,
       },
     };
   }
@@ -179,27 +210,50 @@ export class OpenAIResponsesModelClient implements ModelClient {
     };
   }
 
-  private extractText(body: OpenAIResponsesApiResponse): string {
+  private extractText(body: OpenAIResponsesApiResponse): ExtractedCompatibilityResponse {
     const directOutputText = normalizeTextValue(body.output_text);
     if (directOutputText) {
-      return directOutputText;
+      return {
+        content: directOutputText,
+        compatibility: {
+          status: "compatible",
+          path: "responses_output_text",
+        },
+      };
     }
 
     const outputParts = body.output?.flatMap((item) => extractOutputItemText(item)) ?? [];
     if (outputParts.length > 0) {
-      return outputParts.join("");
+      return {
+        content: outputParts.join(""),
+        compatibility: {
+          status: "native",
+          path: "responses_output",
+        },
+      };
     }
 
     const choiceParts = body.choices?.flatMap((choice) => extractChoiceText(choice)) ?? [];
     if (choiceParts.length > 0) {
-      return choiceParts.join("");
+      return {
+        content: choiceParts.join(""),
+        compatibility: {
+          status: "compatible",
+          path: "chat_completions_choices",
+        },
+      };
     }
 
     if (body.error?.message) {
-      return body.error.message;
+      return {
+        content: "",
+        errorMessage: body.error.message,
+      };
     }
 
-    return "";
+    return {
+      content: "",
+    };
   }
 }
 

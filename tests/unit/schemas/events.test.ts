@@ -49,4 +49,51 @@ describe("event contracts", () => {
     expect(event.type).toBe("tool.denied");
     expect(event.payload.decision.type).toBe("deny");
   });
+
+  it("supports assistant message events with provider compatibility metadata", () => {
+    const event = {
+      id: "evt_3",
+      sessionId: "ses_1",
+      turnId: "turn_1",
+      type: "assistant.message",
+      timestamp: "2026-04-05T00:00:02.000Z",
+      payload: {
+        content: "hello from a compatibility fallback",
+        provider: "openai",
+        model: "gpt-test",
+        compatibility: {
+          status: "compatible",
+          path: "chat_completions_choices",
+        },
+      },
+    } satisfies RuntimeEvent;
+
+    expect(event.type).toBe("assistant.message");
+    expect(event.payload.compatibility?.path).toBe("chat_completions_choices");
+  });
+
+  it("supports explicit applied-edit runtime events", () => {
+    const event = {
+      id: "evt_4",
+      sessionId: "ses_1",
+      turnId: "turn_1",
+      stepId: "step_2",
+      type: "edit.applied",
+      timestamp: "2026-04-05T00:00:03.000Z",
+      payload: {
+        edit: {
+          mode: "generated_create",
+          path: "scripts/show-disk-space.sh",
+          changed: true,
+          toolName: "apply_patch",
+          created: true,
+          targetSource: "inferred",
+        },
+      },
+    } satisfies RuntimeEvent;
+
+    expect(event.type).toBe("edit.applied");
+    expect(event.payload.edit.mode).toBe("generated_create");
+    expect(event.payload.edit.targetSource).toBe("inferred");
+  });
 });

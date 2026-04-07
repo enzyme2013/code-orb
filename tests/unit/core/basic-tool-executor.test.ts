@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { BasicToolExecutor, MemoryEventSink } from "../../../packages/core/src/index";
+import { BasicToolExecutor, MemoryEventSink, StaticToolRegistry } from "../../../packages/core/src/index";
 
 import { AllowAllPolicyEngine, AutoApproveResolver } from "../../helpers/runtime-fakes";
 
@@ -87,5 +87,119 @@ describe("BasicToolExecutor", () => {
       searchText: "missing",
     });
     expect(await readFile(join(cwd, "README.md"), "utf8")).toBe("hello\n");
+  });
+
+  it("returns an explicit unknown-tool error when no registration exists", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-tool-executor-"));
+    tempDirs.push(cwd);
+
+    const executor = new BasicToolExecutor();
+    const outcome = await executor.execute(
+      {
+        id: "call_unknown",
+        sessionId: "ses_test",
+        turnId: "turn_test",
+        stepId: "step_test",
+        toolName: "missing_tool",
+        input: {},
+        requestedAt: new Date().toISOString(),
+      },
+      {
+        cwd,
+        eventSink: new MemoryEventSink(),
+        policyEngine: new AllowAllPolicyEngine(),
+        approvalResolver: new AutoApproveResolver(),
+      },
+    );
+
+    expect(outcome.result.status).toBe("error");
+    expect(outcome.result.error?.code).toBe("unknown_tool");
+    expect(outcome.result.error?.message).toBe("Unknown tool: missing_tool");
+  });
+
+  it("validates tool input before dispatching to the backend", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-tool-executor-"));
+    tempDirs.push(cwd);
+
+    const executor = new BasicToolExecutor();
+    const outcome = await executor.execute(
+      {
+        id: "call_invalid",
+        sessionId: "ses_test",
+        turnId: "turn_test",
+        stepId: "step_test",
+        toolName: "read_file",
+        input: {
+          path: 123,
+        },
+        requestedAt: new Date().toISOString(),
+      },
+      {
+        cwd,
+        eventSink: new MemoryEventSink(),
+        policyEngine: new AllowAllPolicyEngine(),
+        approvalResolver: new AutoApproveResolver(),
+      },
+    );
+
+    expect(outcome.result.status).toBe("error");
+    expect(outcome.result.error?.code).toBe("invalid_tool_input");
+    expect(outcome.result.error?.details).toEqual({
+      toolName: "read_file",
+      field: "path",
+      expected: "string",
+    });
+  });
+
+  it("can execute a registry-provided tool without changing executor-local code", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-tool-executor-"));
+    tempDirs.push(cwd);
+
+    const executor = new BasicToolExecutor(
+      new StaticToolRegistry([
+        {
+          definition: {
+            name: "custom_echo",
+            description: "Echo validated input",
+            kind: "context",
+            mutability: "read_only",
+            approvalRequirement: "auto",
+          },
+          backend: "custom_registry",
+          validateInput: (input) => ({
+            value: String(input.value ?? ""),
+          }),
+          execute: async (input) => ({
+            echoed: input.value,
+          }),
+        },
+      ]),
+    );
+
+    const outcome = await executor.execute(
+      {
+        id: "call_custom",
+        sessionId: "ses_test",
+        turnId: "turn_test",
+        stepId: "step_test",
+        toolName: "custom_echo",
+        input: {
+          value: "hello",
+        },
+        requestedAt: new Date().toISOString(),
+      },
+      {
+        cwd,
+        eventSink: new MemoryEventSink(),
+        policyEngine: new AllowAllPolicyEngine(),
+        approvalResolver: new AutoApproveResolver(),
+      },
+    );
+
+    expect(outcome.result.status).toBe("success");
+    expect(outcome.result.output).toEqual({
+      echoed: "hello",
+    });
+    expect(outcome.result.metadata.backend).toBe("custom_registry");
   });
 });

@@ -30,6 +30,14 @@ describe("session artifact contract", () => {
           outcome: "completed",
           summary: "Updated the implementation and verified the result.",
           filesChanged: ["src/index.ts"],
+          edits: [
+            {
+              mode: "targeted_replacement",
+              path: "src/index.ts",
+              changed: true,
+              toolName: "apply_patch",
+            },
+          ],
           validations: [
             {
               name: "pnpm test",
@@ -45,6 +53,7 @@ describe("session artifact contract", () => {
 
     expect(restored.sessionId).toBe("ses_1");
     expect(restored.changedFiles).toEqual(["src/index.ts"]);
+    expect(restored.turnReports[0]?.edits?.[0]?.mode).toBe("targeted_replacement");
     expect(restored.turnReports[0]?.validations?.[0]?.status).toBe("passed");
   });
 });

@@ -92,6 +92,37 @@ The initial step lifecycle should stay simple:
 4. feed results back into turn state
 5. decide whether to continue, verify, or stop
 
+## Current Loop Contract
+
+`0.6.0` does not yet require a full generic multi-iteration query loop, but it does require the current runtime behavior to be described as an explicit loop contract.
+
+The current runtime should be interpreted this way:
+
+1. create or refine turn context
+2. produce model output or deterministic runtime output
+3. translate any auditable assistant-produced edit into an explicit execution mode when applicable
+4. execute tools and verification through runtime-owned boundaries
+5. feed tool, verification, and policy outcomes back into turn state
+6. decide whether the turn should continue or stop
+
+This keeps the current runtime honest even when the implementation still resolves many tasks through one dominant execution path instead of a general internal loop.
+
+## Continue And Stop Conditions
+
+For the current runtime baseline:
+
+- continue conditions should be explicit
+  - more repository context is required before execution can continue
+  - an edit was applied and a verification step is still required
+  - a verification failure re-enters turn state through a bounded repair path
+- stop conditions should be explicit
+  - the requested work reached a terminal turn result
+  - verification reached a terminal passed or failed result for the current runtime path
+  - safety policy denied the next required mutating action
+  - provider or tool execution returned a terminal failure that the current runtime does not repair further
+
+`0.7.0` remains responsible for turning this explicit contract into a reusable multi-iteration turn loop.
+
 ## Retry Behavior
 
 Retries should be explicit and bounded. The system should avoid invisible loops that keep mutating the repository without a clear stopping condition.
@@ -161,3 +192,19 @@ Specifically:
 - for explicit file-writing requests, the agent engine may translate assistant-generated code blocks into auditable repository writes through the tool executor instead of stopping at a conversational summary
 
 This extends the CLI from one-shot commands to multi-turn foreground interaction without introducing daemon mode or changing the core runtime boundaries.
+
+## V0.6 Baseline
+
+The `0.6.0` baseline keeps the current implementation intentionally simple while making several semantics explicit:
+
+- provider compatibility behavior that affects runtime correctness must be normalized and documented
+- assistant-produced edits should be modeled as explicit runtime edit modes:
+  - generated create
+  - generated rewrite
+  - targeted replacement
+- generated edit execution, verification, and stop decisions should be observable as runtime behavior rather than inferred only from conversational output
+- the documented current-loop contract should describe real runtime behavior now, even before a fuller reusable loop exists
+
+This is still not a commitment to a fully generic multi-iteration runtime in `0.6.0`.
+
+That broader loop work remains the responsibility of `0.7.0`.

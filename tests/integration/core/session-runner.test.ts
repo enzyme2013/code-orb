@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   BasicAgentEngine,
@@ -11,6 +11,7 @@ import {
   LocalGitStateReader,
   LocalSessionStore,
   MemoryEventSink,
+  OpenAIResponsesModelClient,
 } from "@code-orb/core";
 
 import {
@@ -114,6 +115,77 @@ describe("BasicSessionRunner", () => {
     }
   });
 
+  it("records degraded provider compatibility metadata in assistant events after streaming fallback recovery", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const runner = new BasicSessionRunner();
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "resp_empty",
+          output: [],
+        }),
+      } as Response)
+      .mockResolvedValueOnce(
+        new Response(
+          [
+            "event: response.output_text.delta",
+            'data: {"type":"response.output_text.delta","delta":"compatibility recovered"}',
+            "",
+            "event: response.output_text.done",
+            'data: {"type":"response.output_text.done","text":"compatibility recovered"}',
+            "",
+          ].join("\n"),
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream",
+            },
+          },
+        ),
+      );
+
+    try {
+      const report = await runner.run(
+        {
+          cwd,
+          task: "summarize the next action",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new NoopToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new OpenAIResponsesModelClient({
+            apiKey: "test-key",
+            model: "gpt-test",
+            baseUrl: "https://example.com/v1",
+            fetchImpl,
+          }),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore: new LocalSessionStore(),
+        },
+      );
+
+      expect(report.outcome).toBe("completed");
+
+      const assistantEvent = eventSink.events.find((event) => event.type === "assistant.message");
+      expect(assistantEvent?.type).toBe("assistant.message");
+      if (assistantEvent?.type === "assistant.message") {
+        expect(assistantEvent.payload.compatibility).toEqual({
+          status: "degraded",
+          path: "responses_streaming_fallback",
+          notes: ["Recovered assistant content through streaming fallback after an empty non-streaming response."],
+        });
+      }
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("returns a failed turn report when an edit target cannot be applied", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
     const eventSink = new MemoryEventSink();
@@ -208,6 +280,57 @@ describe("BasicSessionRunner", () => {
         "The requested edit could not be applied because the target text no longer matched the file.",
       ]);
       expect(report.artifactPath).toContain(`${join(".orb", "sessions", `${report.sessionId}.json`)}`);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("documents the current loop contract through step kinds and explicit edit and verification events", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+
+    try {
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(join(cwd, "README.md"), "__CODE_ORB_PLACEHOLDER__\n", "utf8");
+      await writeFile(
+        join(cwd, "verify.mjs"),
+        [
+          'import { readFileSync } from "node:fs";',
+          'const content = readFileSync("README.md", "utf8");',
+          'if (!content.includes("Hello, Code Orb!")) process.exit(1);',
+        ].join("\n"),
+        "utf8",
+      );
+
+      const runner = new BasicSessionRunner();
+      const report = await runner.run(
+        {
+          cwd,
+          task: 'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new FakeModelClient("Create a short execution summary."),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      expect(report.outcome).toBe("completed");
+      expect(eventSink.events.filter((event) => event.type === "step.started").map((event) => event.payload.kind)).toEqual([
+        "planning",
+        "context",
+        "tool_use",
+        "verification",
+      ]);
+      expect(eventSink.events.some((event) => event.type === "edit.applied")).toBe(true);
+      expect(eventSink.events.some((event) => event.type === "verify.started")).toBe(true);
+      expect(eventSink.events.some((event) => event.type === "verify.finished")).toBe(true);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -498,6 +621,16 @@ describe("BasicSessionRunner", () => {
 
       expect(report.outcome).toBe("completed");
       expect(report.turnReports[0]?.filesChanged).toEqual(["show-disk-space.sh"]);
+      expect(report.turnReports[0]?.edits).toEqual([
+        {
+          mode: "generated_create",
+          path: "show-disk-space.sh",
+          changed: true,
+          toolName: "apply_patch",
+          created: true,
+          targetSource: "inferred",
+        },
+      ]);
       expect(report.turnReports[0]?.summary).toBe("Wrote show-disk-space.sh from assistant-generated content");
       expect(scriptContent).toBe("#!/bin/sh\ndf -h /\n");
     } finally {
@@ -562,6 +695,16 @@ describe("BasicSessionRunner", () => {
 
       expect(report.outcome).toBe("completed");
       expect(report.turnReports[0]?.filesChanged).toEqual(["check_disk.sh"]);
+      expect(report.turnReports[0]?.edits).toEqual([
+        {
+          mode: "generated_create",
+          path: "check_disk.sh",
+          changed: true,
+          toolName: "apply_patch",
+          created: true,
+          targetSource: "assistant",
+        },
+      ]);
       expect(report.turnReports[0]?.summary).toBe("Wrote check_disk.sh from assistant-generated content");
       expect(scriptContent).toContain("#!/bin/bash");
       expect(scriptContent).toContain('echo "=== 磁盘空间使用情况 ==="');
@@ -611,8 +754,74 @@ describe("BasicSessionRunner", () => {
 
       expect(report.outcome).toBe("completed");
       expect(report.turnReports[0]?.filesChanged).toEqual(["README.md"]);
+      expect(report.turnReports[0]?.edits).toEqual([
+        {
+          mode: "generated_rewrite",
+          path: "README.md",
+          changed: true,
+          toolName: "apply_patch",
+          targetSource: "task",
+        },
+      ]);
       expect(report.turnReports[0]?.summary).toBe("Wrote README.md from assistant-generated content");
       expect(readme).toBe("# Code Orb\n\nCode Orb is a CLI-first coding agent for local repositories.\n");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("records targeted replacement edits explicitly for replace-and-verify tasks", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+
+    try {
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(join(cwd, "README.md"), "__CODE_ORB_PLACEHOLDER__\n", "utf8");
+      await writeFile(
+        join(cwd, "verify.mjs"),
+        [
+          'import { readFileSync } from "node:fs";',
+          'const content = readFileSync("README.md", "utf8");',
+          'if (!content.includes("Hello, Code Orb!")) process.exit(1);',
+        ].join("\n"),
+        "utf8",
+      );
+
+      const runner = new BasicSessionRunner();
+      const report = await runner.run(
+        {
+          cwd,
+          task: 'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new FakeModelClient("Create a short execution summary."),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      expect(report.outcome).toBe("completed");
+      expect(report.turnReports[0]?.edits).toEqual([
+        {
+          mode: "targeted_replacement",
+          path: "README.md",
+          changed: true,
+          toolName: "apply_patch",
+        },
+      ]);
+
+      const editEvent = eventSink.events.find((event) => event.type === "edit.applied");
+      expect(editEvent?.type).toBe("edit.applied");
+      if (editEvent?.type === "edit.applied") {
+        expect(editEvent.payload.edit.mode).toBe("targeted_replacement");
+        expect(editEvent.payload.edit.path).toBe("README.md");
+      }
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

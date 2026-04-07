@@ -1,4 +1,7 @@
 import type {
+  AppliedEdit,
+  AppliedEditMode,
+  AppliedEditTargetSource,
   ModelMessage,
   StepKind,
   StepRuntimeState,
@@ -43,8 +46,9 @@ export class BasicAgentEngine implements AgentEngine {
       (await this.tryExecuteReplaceAndVerifyTask(turn, context)) ??
       (await this.tryExecuteGeneratedFileWriteTask(turn, context, plan.summary)) ??
       {};
+    const edits = execution.edits?.length ? execution.edits : undefined;
     const validations = execution.validation ? [execution.validation] : undefined;
-    const filesChanged = execution.changedFile ? [execution.changedFile] : undefined;
+    const filesChanged = collectChangedFiles(execution.changedFile, edits);
     const risks =
       execution.risks ??
       (execution.validation?.status === "failed"
@@ -62,6 +66,7 @@ export class BasicAgentEngine implements AgentEngine {
       outcome: execution.outcome ?? "completed",
       summary: execution.summary ?? plan.summary,
       filesChanged,
+      edits,
       validations,
       risks,
       nextSteps: plan.items,
@@ -132,6 +137,7 @@ export class BasicAgentEngine implements AgentEngine {
         profile: context.defaultProfile,
         provider: response.provider,
         model: response.model,
+        compatibility: response.compatibility,
       },
     });
 
@@ -166,6 +172,7 @@ export class BasicAgentEngine implements AgentEngine {
     | {
         summary?: string;
         changedFile?: string;
+        edits?: AppliedEdit[];
         validation?: ValidationResult;
         outcome?: TurnReport["outcome"];
         risks?: string[];
@@ -232,10 +239,14 @@ export class BasicAgentEngine implements AgentEngine {
       };
     }
 
+    const appliedEdit = buildAppliedEdit(editResult, targetMatch.path, "targeted_replacement");
+    this.emitAppliedEdit(turn, editStep.id, context, appliedEdit);
+
     if (!parsed.verifyCommand) {
       return {
         summary: `Updated ${targetMatch.path}`,
         changedFile: targetMatch.path,
+        edits: [appliedEdit],
       };
     }
 
@@ -299,12 +310,14 @@ export class BasicAgentEngine implements AgentEngine {
         validation,
         outcome: "failed",
         risks: ["Verification failed after the edit was applied."],
+        edits: [appliedEdit],
       };
     }
 
     return {
       summary: `Updated ${targetMatch.path} and ran verification`,
       changedFile: targetMatch.path,
+      edits: [appliedEdit],
       validation,
     };
   }
@@ -317,6 +330,7 @@ export class BasicAgentEngine implements AgentEngine {
     | {
         summary?: string;
         changedFile?: string;
+        edits?: AppliedEdit[];
         validation?: ValidationResult;
         outcome?: TurnReport["outcome"];
         risks?: string[];
@@ -347,10 +361,19 @@ export class BasicAgentEngine implements AgentEngine {
       };
     }
 
+    const appliedEdit = buildAppliedEdit(
+      editResult,
+      parsed.path,
+      inferGeneratedEditMode(editResult),
+      parsed.pathSource,
+    );
+    this.emitAppliedEdit(turn, editStep.id, context, appliedEdit);
+
     if (!parsed.verifyCommand) {
       return {
         summary: `Wrote ${parsed.path} from assistant-generated content`,
         changedFile: parsed.path,
+        edits: [appliedEdit],
       };
     }
 
@@ -363,6 +386,7 @@ export class BasicAgentEngine implements AgentEngine {
           ? `Wrote ${parsed.path} and ran verification`
           : `Wrote ${parsed.path}, but verification still failed.`,
       changedFile: parsed.path,
+      edits: [appliedEdit],
       validation: verify.validation,
       outcome: verify.validation.status === "failed" ? "failed" : undefined,
       risks: verify.validation.status === "failed" ? ["Verification failed after the file was written."] : [],
@@ -376,6 +400,7 @@ export class BasicAgentEngine implements AgentEngine {
       | {
         summary?: string;
         changedFile?: string;
+        edits?: AppliedEdit[];
         validation?: ValidationResult;
         outcome?: TurnReport["outcome"];
         risks?: string[];
@@ -397,11 +422,13 @@ export class BasicAgentEngine implements AgentEngine {
     let latestOutput = combineCommandOutput(latestVerification.output);
     let changedFile: string | undefined;
     let lastSummary: string | undefined;
+    const appliedEdits: AppliedEdit[] = [];
     const attemptedFixes = new Set<string>();
 
     if (latestVerification.validation.status === "passed") {
       return {
         summary: `Verification already passed for ${parsed.verifyCommand}`,
+        edits: appliedEdits,
         validation: latestVerification.validation,
       };
     }
@@ -411,6 +438,7 @@ export class BasicAgentEngine implements AgentEngine {
       if (!diagnosis) {
         return {
           summary: "Verification failed, but the runtime could not diagnose the relevant implementation yet.",
+          edits: appliedEdits.length > 0 ? appliedEdits : undefined,
           validation: latestVerification.validation,
         };
       }
@@ -434,6 +462,7 @@ export class BasicAgentEngine implements AgentEngine {
         return {
           summary: `Identified ${diagnosis.sourcePath}, but no safe benchmark fix was available.`,
           changedFile: diagnosis.sourcePath,
+          edits: appliedEdits.length > 0 ? appliedEdits : undefined,
           validation: latestVerification.validation,
         };
       }
@@ -443,6 +472,7 @@ export class BasicAgentEngine implements AgentEngine {
         return {
           summary: `${proposedFix.summary}, but no new repair retry was available.`,
           changedFile: diagnosis.sourcePath,
+          edits: appliedEdits.length > 0 ? appliedEdits : undefined,
           validation: latestVerification.validation,
         };
       }
@@ -462,6 +492,7 @@ export class BasicAgentEngine implements AgentEngine {
         return {
           summary: `${proposedFix.summary} could not be applied: ${editFailure.reason}`,
           changedFile: diagnosis.sourcePath,
+          edits: appliedEdits.length > 0 ? appliedEdits : undefined,
           validation: latestVerification.validation,
           outcome: editFailure.outcome,
           risks: editFailure.risks,
@@ -470,6 +501,9 @@ export class BasicAgentEngine implements AgentEngine {
 
       changedFile = diagnosis.sourcePath;
       lastSummary = proposedFix.summary;
+      const appliedEdit = buildAppliedEdit(editResult, diagnosis.sourcePath, "targeted_replacement");
+      appliedEdits.push(appliedEdit);
+      this.emitAppliedEdit(turn, editStep.id, context, appliedEdit);
 
       latestVerification = await this.runVerification(
         turn,
@@ -486,6 +520,7 @@ export class BasicAgentEngine implements AgentEngine {
           ? lastSummary
           : `${lastSummary ?? "Applied a benchmark fix"}, but verification still failed after a repair retry`,
       changedFile,
+      edits: appliedEdits.length > 0 ? appliedEdits : undefined,
       validation: latestVerification.validation,
     };
   }
@@ -635,6 +670,25 @@ export class BasicAgentEngine implements AgentEngine {
     step.status = "completed";
     step.endedAt = createTimestamp();
   }
+
+  private emitAppliedEdit(
+    turn: TurnRuntimeState,
+    stepId: string,
+    context: AgentExecutionContext,
+    edit: AppliedEdit,
+  ): void {
+    context.eventSink.emit({
+      id: createRuntimeId("evt"),
+      sessionId: turn.sessionId,
+      turnId: turn.id,
+      stepId,
+      type: "edit.applied",
+      timestamp: createTimestamp(),
+      payload: {
+        edit,
+      },
+    });
+  }
 }
 
 function formatFollowUpContext(context: AgentExecutionContext["followUpContext"]): string {
@@ -673,7 +727,7 @@ function parseReplaceAndVerifyTask(task: string): { searchText: string; replaceT
 function parseGeneratedFileWriteTask(
   task: string,
   assistantResponse: string,
-): { path: string; content: string; verifyCommand?: string } | null {
+): { path: string; content: string; pathSource: AppliedEditTargetSource; verifyCommand?: string } | null {
   if (!looksLikeFileWriteTask(task)) {
     return null;
   }
@@ -683,10 +737,10 @@ function parseGeneratedFileWriteTask(
     return null;
   }
 
-  const path =
-    extractRequestedPath(task) ??
-    extractSuggestedPathFromAssistantResponse(assistantResponse) ??
-    inferGeneratedFilePath(task, codeBlock.language);
+  const requestedPath = extractRequestedPath(task);
+  const assistantSuggestedPath = extractSuggestedPathFromAssistantResponse(assistantResponse);
+  const inferredPath = inferGeneratedFilePath(task, codeBlock.language);
+  const path = requestedPath ?? assistantSuggestedPath ?? inferredPath;
   if (!path) {
     return null;
   }
@@ -694,6 +748,7 @@ function parseGeneratedFileWriteTask(
   return {
     path,
     content: ensureTrailingNewline(codeBlock.content),
+    pathSource: requestedPath ? "task" : assistantSuggestedPath ? "assistant" : "inferred",
     verifyCommand: extractVerifyCommand(task),
   };
 }
@@ -894,4 +949,47 @@ function classifyToolFailure(
   }
 
   return null;
+}
+
+function inferGeneratedEditMode(result: ToolExecutionResult): AppliedEditMode {
+  const output = result.output as { created?: boolean } | undefined;
+  return output?.created ? "generated_create" : "generated_rewrite";
+}
+
+function buildAppliedEdit(
+  result: ToolExecutionResult,
+  fallbackPath: string,
+  mode: AppliedEditMode,
+  targetSource?: AppliedEditTargetSource,
+): AppliedEdit {
+  const output = result.output as
+    | {
+        path?: string;
+        replaced?: boolean;
+        created?: boolean;
+      }
+    | undefined;
+
+  return {
+    mode,
+    path: String(output?.path ?? fallbackPath),
+    changed: Boolean(output?.replaced),
+    toolName: "apply_patch",
+    created: output?.created === true ? true : undefined,
+    targetSource,
+  };
+}
+
+function collectChangedFiles(changedFile?: string, edits?: AppliedEdit[]): string[] | undefined {
+  const files = new Set<string>();
+
+  if (changedFile) {
+    files.add(changedFile);
+  }
+
+  for (const edit of edits ?? []) {
+    files.add(edit.path);
+  }
+
+  return files.size > 0 ? [...files] : undefined;
 }

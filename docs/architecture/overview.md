@@ -149,6 +149,31 @@ For `0.5.0`, `apps/cli` now also owns the interactive foreground loop for `orb c
 - `apps/cli` owns prompt intake, slash-style control commands, and terminal interaction flow
 - `packages/core` still owns session execution, turn execution, reporting, and persistence semantics
 
+## 0.6 Runtime Contract Baseline
+
+`0.6.0` adds a stricter interpretation of what must stay runtime-owned before later shells or a richer tool runtime can be added.
+
+The following concerns belong to core runtime boundaries, not shell behavior:
+
+- provider compatibility normalization
+  - adapters may absorb provider-specific quirks, but the runtime should consume normalized capabilities, normalized responses, and explicit degraded or unsupported outcomes
+  - for the current OpenAI-compatible adapter, the supported normalized response paths are:
+    - `responses_output` as the native path
+    - `responses_output_text` as a compatible responses-style path
+    - `chat_completions_choices` as a compatible gateway path
+    - `responses_streaming_fallback` as a degraded recovery path when non-streaming normalization returns no assistant content
+  - provider error payloads or empty-content outcomes after fallback should remain terminal failures rather than being treated as assistant content
+- assistant-produced edit execution
+  - the runtime should distinguish generated create, generated rewrite, and targeted replacement as explicit execution behaviors instead of relying on shell-local conversational heuristics
+- tool registration boundaries
+  - built-in tools should remain runtime-owned registrations rather than executor-local constants or CLI-owned catalogs
+- current loop semantics
+  - the runtime should document what one turn-level iteration means now, even before `0.7.0` introduces a fuller multi-iteration loop
+
+This baseline is intentionally narrower than `0.7.0`.
+
+`0.6.0` should clarify the contract that the current runtime already depends on. It should not yet expand into a general orchestration runtime.
+
 ## Boundary Rules
 
 - `apps/cli` should not own business logic that future shells also need.
@@ -157,6 +182,9 @@ For `0.5.0`, `apps/cli` now also owns the interactive foreground loop for `orb c
 - `packages/schemas` owns stable cross-boundary shapes.
 - `packages/shared` must stay small and generic; it is not a dumping ground.
 - structured events are runtime infrastructure, not ad hoc CLI logging.
+- provider compatibility handling that affects correctness must not be hidden in CLI fallback code.
+- generated edit mode classification and execution must remain runtime behavior, not shell parsing behavior.
+- tool registration and lookup boundaries must remain runtime-owned even when only built-in tools exist.
 
 ## Future Extension Path
 

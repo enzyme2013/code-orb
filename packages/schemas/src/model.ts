@@ -4,12 +4,24 @@ import type { ToolDefinition, ToolName } from "./tools.js";
 export type ModelProfile = string;
 export type ModelMessageRole = "system" | "user" | "assistant" | "tool";
 export type ModelFinishReason = "stop" | "tool_calls" | "length" | "error" | "cancelled";
+export type ProviderCompatibilityStatus = "native" | "compatible" | "degraded";
+export type ProviderCompatibilityPath =
+  | "responses_output"
+  | "responses_output_text"
+  | "chat_completions_choices"
+  | "responses_streaming_fallback";
 
 export interface ProviderCapabilities {
   toolCalling: boolean;
   streaming: boolean;
   structuredOutput: boolean;
   maxContextTokens?: number;
+}
+
+export interface ProviderCompatibility {
+  status: ProviderCompatibilityStatus;
+  path: ProviderCompatibilityPath;
+  notes?: string[];
 }
 
 export interface ModelMessage {
@@ -49,6 +61,7 @@ export interface ModelResponse {
   model: string;
   profile: ModelProfile;
   content: string;
+  compatibility?: ProviderCompatibility;
   toolCalls?: ModelToolCall[];
   finishReason: ModelFinishReason;
   usage?: ModelUsage;

@@ -1,7 +1,7 @@
 import type { EventId, SessionId, StepId, Timestamp, TurnId } from "./ids.js";
-import type { ModelProfile } from "./model.js";
+import type { ModelProfile, ProviderCompatibility } from "./model.js";
 import type { PermissionDecision } from "./policy.js";
-import type { SessionReport, TurnReport, ValidationResult } from "./report.js";
+import type { AppliedEdit, SessionReport, TurnReport, ValidationResult } from "./report.js";
 import type { TurnPlan } from "./runtime.js";
 import type { ToolCallRequest, ToolExecutionResult } from "./tools.js";
 
@@ -11,6 +11,7 @@ export type RuntimeEventType =
   | "step.started"
   | "assistant.message"
   | "plan.generated"
+  | "edit.applied"
   | "tool.started"
   | "tool.finished"
   | "tool.denied"
@@ -61,6 +62,7 @@ export type AssistantMessageEvent = RuntimeEventEnvelope<
     profile?: ModelProfile;
     provider?: string;
     model?: string;
+    compatibility?: ProviderCompatibility;
   }
 >;
 
@@ -69,6 +71,13 @@ export type PlanGeneratedEvent = RuntimeEventEnvelope<
   {
     plan: TurnPlan;
     profile?: ModelProfile;
+  }
+>;
+
+export type EditAppliedEvent = RuntimeEventEnvelope<
+  "edit.applied",
+  {
+    edit: AppliedEdit;
   }
 >;
 
@@ -137,6 +146,7 @@ export type RuntimeEvent =
   | StepStartedEvent
   | AssistantMessageEvent
   | PlanGeneratedEvent
+  | EditAppliedEvent
   | ToolStartedEvent
   | ToolFinishedEvent
   | ToolDeniedEvent

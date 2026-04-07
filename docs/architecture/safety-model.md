@@ -57,6 +57,21 @@ This gives Code Orb a consistent trust model without introducing a complex polic
 - write operations should be attributable to a task and session
 - patch application is preferred over opaque mutation
 
+## Generated Edit Rules
+
+Assistant-produced repository edits do not bypass policy just because the model described them conversationally first.
+
+For the `0.6.0` baseline:
+
+- generated create is a mutating action
+- generated rewrite is a mutating action
+- targeted replacement is a mutating action
+- each of these must still route through runtime policy evaluation and approval handling
+
+The important rule is that conversational inference is not itself an approval path.
+
+If the runtime translates assistant output into a repository mutation, that mutation must still be attributable, reviewable, and enforceable through the same safety model as other edit tools.
+
 ## Auditability
 
 Every significant action should be recoverable from logs or event artifacts:

@@ -5,11 +5,22 @@ import type { GitWorkingTreeSnapshot } from "./session-artifact.js";
 export type ValidationStatus = "passed" | "failed" | "skipped";
 export type TurnOutcome = "completed" | "failed" | "blocked";
 export type SessionOutcome = "completed" | "failed" | "cancelled";
+export type AppliedEditMode = "generated_create" | "generated_rewrite" | "targeted_replacement";
+export type AppliedEditTargetSource = "task" | "assistant" | "inferred";
 
 export interface ValidationResult {
   name: string;
   status: ValidationStatus;
   details?: string;
+}
+
+export interface AppliedEdit {
+  mode: AppliedEditMode;
+  path: string;
+  changed: boolean;
+  toolName: string;
+  created?: boolean;
+  targetSource?: AppliedEditTargetSource;
 }
 
 export interface TurnReport {
@@ -18,6 +29,7 @@ export interface TurnReport {
   outcome: TurnOutcome;
   summary: string;
   filesChanged?: string[];
+  edits?: AppliedEdit[];
   validations?: ValidationResult[];
   risks?: string[];
   nextSteps?: PlanItem[];

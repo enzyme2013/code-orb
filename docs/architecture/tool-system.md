@@ -31,6 +31,8 @@ This means a tool is not just a function pointer. A tool is a contract plus runt
 - Tool calls should be visible in the session event stream.
 - Tools should do one thing well instead of exposing large ambiguous surfaces.
 - file-editing tools may create a new repository file when the request is explicit and auditable rather than inferring hidden side effects
+- built-in tool registration should be a runtime-owned concern rather than only executor-local hardcoding
+- tool lookup, validation, dispatch, and backend execution should stay conceptually distinct even when one implementation owns several of them early on
 
 ## Boundary
 
@@ -41,10 +43,52 @@ The CLI may render tool activity, but it should not redefine tool semantics.
 More precisely:
 
 - the `Agent Engine` decides whether to request a tool
+- the runtime-owned tool registry decides which tool definitions are available
 - the `Tool Executor` decides how that tool request is validated and executed
 - adapters perform the actual side effect
 
 This separation prevents the tool layer from silently turning into a second planner.
+
+## 0.6 Tool Runtime Baseline
+
+`0.6.0` should make the minimum tool-runtime contract explicit before `0.7.0` adds broader orchestration.
+
+That baseline is:
+
+1. registration
+   - the runtime owns the available tool definitions
+2. lookup
+   - unknown-tool behavior is explicit and observable
+3. validation
+   - input shape and execution expectations are checked before the backend runs
+4. policy routing
+   - allow, confirm, or deny decisions happen before side effects
+5. execution
+   - the backend performs the effect or data lookup
+6. metadata and events
+   - results include enough metadata for auditability and later orchestration
+
+`0.6.0` does not require a full dynamic plugin ecosystem.
+
+It does require built-in tools to stop pretending that hardcoded executor-local definitions are the only meaningful registration shape.
+
+## Generated Edit Execution
+
+Assistant-produced edits should be treated as runtime edit semantics, not as shell presentation behavior.
+
+For `0.6.0`, the important distinction is between:
+
+- generated create
+- generated rewrite
+- targeted replacement
+
+These may still share implementation pieces, but they should be distinguishable in runtime reasoning, reporting, and event or metadata surfaces.
+
+When path selection for a generated edit is not explicit in the user task, the runtime should keep the path source auditable, for example:
+
+- requested directly by the task
+- suggested explicitly by assistant output
+- inferred by a bounded runtime heuristic
 
 ## Safety Integration
 
