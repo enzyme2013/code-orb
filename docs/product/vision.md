@@ -6,7 +6,7 @@ Most coding agents are either impressive demos with weak engineering boundaries,
 
 ## Product Direction
 
-Code Orb starts as a local CLI coding agent and later grows into a desktop-capable product without rewriting the core runtime. The CLI is the proving ground for task execution, tool safety, session handling, and verification loops.
+Code Orb starts as a local CLI coding agent and later grows into a desktop-capable product without rewriting the core runtime. The CLI is the proving ground for task execution, tool safety, session handling, verification loops, project guidance, and operator trust.
 
 ## Primary User
 
@@ -31,3 +31,5 @@ The first user is a technical developer working on a local repository who wants 
 ## Desktop Relation
 
 The future desktop product should reuse the same core packages, session model, and tool contracts. Desktop is a new shell around the same core engine, not a separate implementation.
+
+Desktop is intentionally deferred until the CLI is already usable for real local work, ergonomically solid in the terminal, and explicit enough about instructions, configuration, and runtime behavior that a second shell would not be forced to guess.

@@ -29,7 +29,7 @@ Deliver a CLI coding agent that can complete a basic local-repository task loop 
 - remote repository execution
 - hosted collaboration features
 - general plugin ecosystem
-- persistent long-term memory beyond the current session model
+- opaque or autonomous long-term memory systems that go beyond explicit, inspectable session or workspace context
 
 ## Exit Criteria For 0.1.0
 

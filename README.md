@@ -12,12 +12,15 @@ Today it provides:
 - git-aware session reporting for pre-existing vs current-run changes
 - benchmark-backed validation for key milestone paths
 
-The current product shape is still intentionally narrow. The shell and runtime are real, but general task execution is not yet broad or highly autonomous.
+The current product shape is still intentionally narrow. The shell and runtime are real, but the CLI is still experimental and not yet a production-ready coding tool.
 
 Release status:
 
 - `0.4.0` Session And Git Awareness: released
-- `0.5.0` Interactive CLI: implemented
+- `0.5.0` Interactive CLI: implemented with post-release usability fixes on 2026-04-08
+- `0.6.0` Extensibility: planned
+- `0.7.0` Query Loop And Tool Runtime: planned
+- `0.8.0` Usable CLI: planned
 
 ## Read First
 
@@ -119,7 +122,7 @@ Code Orb is currently best suited for:
 - interactive multi-turn iteration in one foreground session
 - session-aware follow-up work and repository-state inspection
 
-It is not yet a broadly capable general coding agent. The current runtime is still narrow in task interpretation and tool selection.
+It is not yet a broadly capable general coding agent. The current runtime is still narrow in task interpretation and tool selection, and repository guidance such as `AGENTS.md` is not yet a fully modeled runtime instruction surface.
 
 ## Repository Layout
 
@@ -137,10 +140,13 @@ scripts/      Automation scripts that support development and release work.
 
 - contributor and agent rules: [AGENTS.md](./AGENTS.md)
 - product scope: [docs/product/v0-scope.md](./docs/product/v0-scope.md)
+- product direction: [docs/product/vision.md](./docs/product/vision.md)
 - architecture overview: [docs/architecture/overview.md](./docs/architecture/overview.md)
 - execution model: [docs/architecture/execution-model.md](./docs/architecture/execution-model.md)
 - roadmap: [docs/roadmap/roadmap.md](./docs/roadmap/roadmap.md)
 - `0.5.0` interactive CLI milestone: [docs/roadmap/releases/0.5.0.md](./docs/roadmap/releases/0.5.0.md)
+- `0.7.0` query loop and tool runtime milestone: [docs/roadmap/releases/0.7.0.md](./docs/roadmap/releases/0.7.0.md)
+- `0.8.0` usable CLI milestone: [docs/roadmap/releases/0.8.0.md](./docs/roadmap/releases/0.8.0.md)
 
 ## Working Style
 

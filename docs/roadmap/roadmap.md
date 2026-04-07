@@ -80,7 +80,8 @@ Release detail: [releases/0.4.0.md](./releases/0.4.0.md)
 
 Current status:
 
-- implemented
+- implemented on 2026-04-06
+- critical post-release usability fixes landed on 2026-04-08 to restore assistant reply rendering, provider reply recovery, and basic single-file generated writes inside `orb chat`
 
 Release detail: [releases/0.5.0.md](./releases/0.5.0.md)
 
@@ -88,13 +89,97 @@ Release detail: [releases/0.5.0.md](./releases/0.5.0.md)
 
 - provider abstraction maturity
 - external tool registration boundaries
+- replace tactical provider-specific fallbacks with clearer adapter behavior and documented compatibility boundaries
+- replace the current heuristic generated-file path with a more explicit execution path for assistant-produced edits
+- define the explicit contracts that a real query loop and tool runtime will build on
 - groundwork for alternate shells
 
-### 0.8.0 Desktop-Ready Core
+Current status:
 
-- clean shell/core separation
-- event and session protocol ready for desktop consumption
-- reduced CLI-specific assumptions inside core
+- planned
+
+Release detail: [releases/0.6.0.md](./releases/0.6.0.md)
+
+### 0.7.0 Query Loop And Tool Runtime
+
+- replace task-specific execution branches with a clearer turn-level query loop
+- make tool execution, verification, retry, and stop conditions explicit runtime transitions
+- introduce a real tool registration and orchestration boundary inside core
+- align Code Orb more closely with the Claude Code-derived runtime shape without importing full Claude Code product breadth
+
+Current status:
+
+- planned
+
+Release detail: [releases/0.7.0.md](./releases/0.7.0.md)
+
+### 0.8.0 Usable CLI
+
+- move the CLI from an experimental demo toward a tool that can support real local-repository work predictably
+- harden execution, verification, and recovery behavior on common coding tasks
+- improve failure reporting, approval clarity, and benchmark-backed reliability
+- prove the CLI is usable before investing in major shell-polish or desktop work
+
+Current status:
+
+- planned
+
+Release detail: [releases/0.8.0.md](./releases/0.8.0.md)
+
+### 0.9.0 CLI UX And TUI
+
+- improve the interactive CLI experience after the runtime is already usable
+- upgrade terminal rendering, interaction flow, and session ergonomics
+- add TUI-oriented improvements without redefining core runtime semantics
+- make iterative coding work faster and easier to inspect from the terminal
+
+Current status:
+
+- planned
+
+Release detail: [releases/0.9.0.md](./releases/0.9.0.md)
+
+### 0.10.0 Workspace Context And Configuration
+
+- make project guidance, runtime configuration, and provider selection first-class parts of normal use
+- expand beyond minimal `AGENTS.md` support into a clearer instruction and configuration model
+- add provider profiles and configuration behavior that are explicit instead of environment-variable folklore
+
+Current status:
+
+- planned
+
+Release detail: [releases/0.10.0.md](./releases/0.10.0.md)
+
+### 0.11.0 Memory And Skills
+
+- add explicit, inspectable memory beyond the current narrow session-follow-up model
+- support reusable project or user skills without collapsing them into the tool layer
+- improve continuity and repeatability for guided coding workflows
+
+Current status:
+
+- planned
+
+Release detail: [releases/0.11.0.md](./releases/0.11.0.md)
+
+### 0.12.0 MCP And Plugin Boundaries
+
+- open a deliberate path for external tool ecosystems after the core runtime, CLI usability, and skill model are already in place
+- define MCP and plugin boundaries without turning the runtime into a marketplace-first product
+- keep extension behavior aligned with core tool, event, and safety contracts
+
+Current status:
+
+- planned
+
+Release detail: [releases/0.12.0.md](./releases/0.12.0.md)
+
+## Later Direction
+
+- desktop-oriented shells remain intentionally deferred until after the CLI is usable, ergonomically solid, and context-aware
+- any future desktop milestone should build on the explicit runtime loop and tool runtime established earlier, rather than introducing them for the first time
+- generalized multi-agent or delegation work should remain later than the instruction, memory, skill, and extension-boundary milestones
 
 ## Roadmap Rules
 
