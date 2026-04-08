@@ -19,7 +19,7 @@ Release status:
 - `0.4.0` Session And Git Awareness: released
 - `0.5.0` Interactive CLI: released on 2026-04-08
 - `0.6.0` Extensibility: released on 2026-04-08
-- `0.7.0` Query Loop And Tool Runtime: planned
+- `0.7.0` Query Loop And Tool Runtime: released on 2026-04-08
 - `0.8.0` Usable CLI: planned
 
 ## Read First
@@ -143,9 +143,12 @@ scripts/      Automation scripts that support development and release work.
 - product direction: [docs/product/vision.md](./docs/product/vision.md)
 - architecture overview: [docs/architecture/overview.md](./docs/architecture/overview.md)
 - execution model: [docs/architecture/execution-model.md](./docs/architecture/execution-model.md)
+- provider runtime: [docs/architecture/provider-runtime.md](./docs/architecture/provider-runtime.md)
+- tool system: [docs/architecture/tool-system.md](./docs/architecture/tool-system.md)
 - roadmap: [docs/roadmap/roadmap.md](./docs/roadmap/roadmap.md)
 - `0.5.0` interactive CLI milestone: [docs/roadmap/releases/0.5.0.md](./docs/roadmap/releases/0.5.0.md)
 - `0.7.0` query loop and tool runtime milestone: [docs/roadmap/releases/0.7.0.md](./docs/roadmap/releases/0.7.0.md)
+- `0.7.0` execution checklist: [docs/roadmap/releases/0.7.0-checklist.md](./docs/roadmap/releases/0.7.0-checklist.md)
 - `0.8.0` usable CLI milestone: [docs/roadmap/releases/0.8.0.md](./docs/roadmap/releases/0.8.0.md)
 
 ## Working Style

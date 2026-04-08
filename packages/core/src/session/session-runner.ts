@@ -1,17 +1,21 @@
 import type { SessionInput, SessionReport, SessionRuntimeState, TurnInput, TurnReport, TurnRuntimeState } from "@code-orb/schemas";
 
 import type { ModelClient } from "../adapters/ports/model-client.js";
+import type { ProviderRuntime } from "../adapters/provider-runtime.js";
 import type { GitStateReader } from "../adapters/git/git-state-reader.js";
 import type { AgentEngine } from "../engine/agent-engine.js";
 import type { EventSink } from "../events/event-sink.js";
 import type { ApprovalResolver, PolicyEngine } from "../policy/policy-engine.js";
 import type { SessionStore } from "./session-store.js";
 import type { ToolExecutor } from "../tools/tool-executor.js";
+import type { ToolOrchestrator } from "../tools/tool-orchestrator.js";
 
 export interface SessionRunnerContext {
   eventSink: EventSink;
   agentEngine: AgentEngine;
   toolExecutor: ToolExecutor;
+  toolOrchestrator?: ToolOrchestrator;
+  providerRuntime?: ProviderRuntime;
   policyEngine: PolicyEngine;
   approvalResolver: ApprovalResolver;
   modelClient: ModelClient;

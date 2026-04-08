@@ -89,3 +89,23 @@ It does require these semantics to become observable through either:
 Consumers should not have to infer critical runtime behavior only from assistant prose or CLI formatting.
 
 The current `0.6.0` baseline now includes `edit.applied` as the explicit runtime event for successful auditable edit execution.
+
+## 0.7 Event Implications
+
+`0.7.0` keeps the same compact event catalog but changes how it is used:
+
+- `assistant.message` may occur more than once inside one turn because tool results can trigger a follow-up `model` step
+- `step.started` now includes `model` as an explicit step kind for post-tool model continuation
+- `turn.completed` now carries a turn report that can include:
+  - `stopReason`
+  - `stepCount`
+
+This keeps the event surface compact while making the multi-iteration turn loop observable to renderers and tests.
+
+Provider continuation and fallback semantics should also remain observable, whether through:
+
+- existing payload enrichment such as compatibility or stop-reason metadata
+- explicit terminal error events
+- future dedicated provider-runtime event families if the compact catalog stops being sufficient
+
+Consumers should not have to guess whether a turn stopped because the loop made a decision or because the provider adapter hit a continuation or transport boundary.

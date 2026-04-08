@@ -38,6 +38,16 @@ export interface ModelToolCall {
   input: Record<string, unknown>;
 }
 
+export interface ModelContinuationState {
+  previousResponseId: string;
+  continuationMessageIndex: number;
+  assistantToolCalls?: ModelToolCall[];
+}
+
+export interface ProviderRuntimeState {
+  modelContinuation?: ModelContinuationState;
+}
+
 export interface ModelUsage {
   inputTokens?: number;
   outputTokens?: number;
@@ -51,6 +61,7 @@ export interface ModelRequest {
   profile: ModelProfile;
   messages: ModelMessage[];
   tools?: ToolDefinition[];
+  continuation?: ModelContinuationState;
   maxOutputTokens?: number;
   temperature?: number;
   metadata?: Record<string, unknown>;
@@ -63,6 +74,9 @@ export interface ModelResponse {
   content: string;
   compatibility?: ProviderCompatibility;
   toolCalls?: ModelToolCall[];
+  continuation?: {
+    responseId?: string;
+  };
   finishReason: ModelFinishReason;
   usage?: ModelUsage;
   raw?: Record<string, unknown>;

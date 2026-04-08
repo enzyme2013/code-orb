@@ -81,6 +81,10 @@ export class AutoApproveResolver implements ApprovalResolver {
 }
 
 export class NoopToolExecutor implements ToolExecutor {
+  listTools() {
+    return [];
+  }
+
   buildPolicyContext(_request: ToolCallRequest, context: ToolExecutionContext): PolicyContext {
     return {
       sessionId: "ses_fake",
@@ -112,6 +116,10 @@ export class ScriptedToolExecutor implements ToolExecutor {
   constructor(
     private readonly handler: (request: ToolCallRequest, context: ToolExecutionContext) => Promise<ToolExecutionResult>,
   ) {}
+
+  listTools() {
+    return [];
+  }
 
   buildPolicyContext(_request: ToolCallRequest, context: ToolExecutionContext): PolicyContext {
     return {

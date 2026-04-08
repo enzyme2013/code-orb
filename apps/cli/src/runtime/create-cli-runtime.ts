@@ -1,7 +1,9 @@
 import {
   BasicAgentEngine,
+  BasicProviderRuntime,
   LocalGitStateReader,
   BasicSessionRunner,
+  BasicToolOrchestrator,
   BasicToolExecutor,
   LocalSessionStore,
   MinimumPolicyEngine,
@@ -32,13 +34,18 @@ export interface CliRuntime {
 export function createCliRuntime(io: CliIO): CliRuntime {
   const renderer = new TerminalEventRenderer(io);
   const eventSink = new RenderingEventSink(renderer);
+  const toolExecutor = new BasicToolExecutor();
+  const toolOrchestrator = new BasicToolOrchestrator(toolExecutor);
+  const providerRuntime = new BasicProviderRuntime();
 
   return {
     runner: new BasicSessionRunner(),
     context: {
       eventSink,
       agentEngine: new BasicAgentEngine(),
-      toolExecutor: new BasicToolExecutor(),
+      toolExecutor,
+      toolOrchestrator,
+      providerRuntime,
       policyEngine: new MinimumPolicyEngine(),
       approvalResolver: new CliApprovalResolver(io),
       modelClient: createModelClientFromEnv(process.env),

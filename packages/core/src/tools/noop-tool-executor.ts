@@ -4,6 +4,10 @@ import { createTimestamp } from "../internal/runtime-utils.js";
 import type { ToolExecutionContext, ToolExecutionOutcome, ToolExecutor } from "./tool-executor.js";
 
 export class NoopToolExecutor implements ToolExecutor {
+  listTools() {
+    return [];
+  }
+
   buildPolicyContext(request: ToolCallRequest, context: ToolExecutionContext): PolicyContext {
     return {
       sessionId: request.sessionId,

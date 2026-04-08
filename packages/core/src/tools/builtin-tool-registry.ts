@@ -19,6 +19,11 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
     kind: "context",
     mutability: "read_only",
     approvalRequirement: "auto",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
   },
   read_file: {
     name: "read_file",
@@ -26,6 +31,17 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
     kind: "context",
     mutability: "read_only",
     approvalRequirement: "auto",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Repository-relative path to read.",
+        },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
   },
   search_text: {
     name: "search_text",
@@ -33,6 +49,17 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
     kind: "context",
     mutability: "read_only",
     approvalRequirement: "auto",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Text query to search for inside the repository.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
   },
   apply_patch: {
     name: "apply_patch",
@@ -40,6 +67,25 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
     kind: "editing",
     mutability: "mutating",
     approvalRequirement: "confirm",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Repository-relative path to update.",
+        },
+        searchText: {
+          type: "string",
+          description: "Existing text to replace. Use an empty string to create or fully rewrite a file.",
+        },
+        replaceText: {
+          type: "string",
+          description: "Replacement text to write into the file.",
+        },
+      },
+      required: ["path", "searchText", "replaceText"],
+      additionalProperties: false,
+    },
   },
   run_command: {
     name: "run_command",
@@ -47,6 +93,17 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
     kind: "execution",
     mutability: "mutating",
     approvalRequirement: "confirm",
+    inputSchema: {
+      type: "object",
+      properties: {
+        command: {
+          type: "string",
+          description: "Shell command to execute in the repository root.",
+        },
+      },
+      required: ["command"],
+      additionalProperties: false,
+    },
   },
 };
 

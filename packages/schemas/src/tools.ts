@@ -5,6 +5,7 @@ export type ToolKind = "context" | "editing" | "execution" | "git" | "session";
 export type ToolMutability = "read_only" | "mutating";
 export type ToolApprovalRequirement = "auto" | "confirm" | "policy";
 export type ToolExecutionStatus = "success" | "denied" | "error" | "cancelled";
+export type ToolModelOutputFormat = "text" | "json";
 
 export interface ToolDefinition {
   name: ToolName;
@@ -12,6 +13,8 @@ export interface ToolDefinition {
   kind: ToolKind;
   mutability: ToolMutability;
   approvalRequirement: ToolApprovalRequirement;
+  inputSchema?: Record<string, unknown>;
+  strict?: boolean;
   timeoutMs?: number;
   supportsInterrupt?: boolean;
 }
@@ -48,4 +51,14 @@ export interface ToolExecutionResult {
   output?: unknown;
   metadata: ToolExecutionMetadata;
   error?: ToolExecutionError;
+}
+
+export interface ToolModelOutput {
+  format: ToolModelOutputFormat;
+  content: string;
+}
+
+export interface ToolCanonicalResult {
+  result: ToolExecutionResult;
+  modelOutput: ToolModelOutput;
 }

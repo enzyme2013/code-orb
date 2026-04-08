@@ -9,6 +9,10 @@ import type { ToolRegistry } from "./tool-registry.js";
 export class BasicToolExecutor implements ToolExecutor {
   constructor(private readonly registry: ToolRegistry = createBuiltinToolRegistry()) {}
 
+  listTools() {
+    return this.registry.list();
+  }
+
   buildPolicyContext(request: Parameters<ToolExecutor["buildPolicyContext"]>[0], context: ToolExecutionContext) {
     return {
       sessionId: request.sessionId,

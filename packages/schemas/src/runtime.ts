@@ -1,11 +1,12 @@
 import type { SessionId, StepId, Timestamp, ToolCallId, TurnId } from "./ids.js";
-import type { SessionOutcome, TurnReport, ValidationResult } from "./report.js";
+import type { ProviderRuntimeState } from "./model.js";
+import type { SessionOutcome, TurnReport, TurnStopReason, ValidationResult } from "./report.js";
 import type { GitWorkingTreeSnapshot } from "./session-artifact.js";
 
 export type SessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
 export type TurnStatus = "pending" | "running" | "completed" | "failed" | "blocked";
 export type StepStatus = "pending" | "running" | "completed" | "failed" | "blocked";
-export type StepKind = "context" | "planning" | "tool_use" | "verification" | "reporting";
+export type StepKind = "context" | "planning" | "model" | "tool_use" | "verification" | "reporting";
 export type PlanItemStatus = "pending" | "in_progress" | "completed" | "blocked";
 
 export interface FollowUpContext {
@@ -71,6 +72,9 @@ export interface TurnRuntimeState {
   plan?: TurnPlan;
   steps: StepRuntimeState[];
   summary?: string;
+  stopReason?: TurnStopReason;
+  iterationCount?: number;
+  providerState?: ProviderRuntimeState;
   report?: TurnReport;
 }
 
@@ -84,5 +88,6 @@ export interface SessionRuntimeState {
   turns: TurnRuntimeState[];
   interactive?: boolean;
   metadata?: SessionMetadata;
+  providerState?: ProviderRuntimeState;
   gitSnapshotBefore?: GitWorkingTreeSnapshot;
 }

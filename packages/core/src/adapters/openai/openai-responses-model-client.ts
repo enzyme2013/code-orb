@@ -1,9 +1,12 @@
 import type {
+  ModelContinuationState,
   ModelMessage,
   ModelRequest,
   ModelResponse,
+  ModelToolCall,
   ProviderCapabilities,
   ProviderCompatibility,
+  ToolDefinition,
 } from "@code-orb/schemas";
 
 import type { ModelClient } from "../ports/model-client.js";
@@ -15,11 +18,51 @@ interface OpenAIResponsesClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+type OpenAIResponsesInputItem =
+  | {
+      role: ModelMessage["role"];
+      content: string;
+    }
+  | {
+      type: "function_call";
+      call_id: string;
+      name: string;
+      arguments: string;
+    }
+  | {
+      type: "function_call_output";
+      call_id: string;
+      output: string;
+    };
+
+interface OpenAIResponsesRequestBody {
+  model: string;
+  input: OpenAIResponsesInputItem[];
+  previous_response_id?: string;
+  tools?: OpenAIResponsesTool[];
+  tool_choice?: "auto";
+  max_output_tokens?: number;
+  temperature?: number;
+  stream?: boolean;
+}
+
+interface OpenAIResponsesTool {
+  type: "function";
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  strict?: boolean;
+}
+
 interface OpenAIResponsesApiResponse {
   output_text?: string;
   id?: string;
   output?: Array<{
     type?: string;
+    id?: string;
+    call_id?: string;
+    name?: string;
+    arguments?: string;
     text?: string;
     content?: Array<{
       type?: string;
@@ -35,6 +78,13 @@ interface OpenAIResponsesApiResponse {
             type?: string;
             text?: string | { value?: string; content?: string };
           }>;
+      tool_calls?: Array<{
+        id?: string;
+        function?: {
+          name?: string;
+          arguments?: string;
+        };
+      }>;
     };
   }>;
   usage?: {
@@ -49,14 +99,27 @@ interface OpenAIResponsesApiResponse {
 
 interface ExtractedCompatibilityResponse {
   content: string;
+  toolCalls: ModelToolCall[];
+  finishReason: ModelResponse["finishReason"];
   compatibility?: ProviderCompatibility;
   errorMessage?: string;
+}
+
+interface StreamingFallbackResult {
+  content: string;
+  toolCalls: ModelToolCall[];
+}
+
+interface RequestAttempt {
+  requestBody: OpenAIResponsesRequestBody;
+  responseBody: OpenAIResponsesApiResponse;
+  usedContinuationFallback: boolean;
 }
 
 export class OpenAIResponsesModelClient implements ModelClient {
   readonly provider = "openai";
   readonly capabilities: ProviderCapabilities = {
-    toolCalling: false,
+    toolCalling: true,
     streaming: false,
     structuredOutput: false,
   };
@@ -70,29 +133,21 @@ export class OpenAIResponsesModelClient implements ModelClient {
   }
 
   async complete(request: ModelRequest): Promise<ModelResponse> {
-    const requestBody = {
-      model: this.options.model,
-      input: request.messages.map((message) => this.toInputText(message)),
-      max_output_tokens: request.maxOutputTokens,
-      temperature: request.temperature,
-    };
+    const primaryRequestBody = this.buildRequestBody(request);
+    let attempted: RequestAttempt;
 
-    const response = await this.fetchImpl(`${this.baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${this.options.apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    try {
+      attempted = await this.executeRequest(primaryRequestBody);
+    } catch (error) {
+      if (!primaryRequestBody.previous_response_id) {
+        throw error;
+      }
 
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(`OpenAI responses request failed (${response.status}): ${message}`);
+      attempted = await this.retryWithoutContinuation(request, primaryRequestBody, "transport_error", "transport_error");
     }
 
-    const body = (await response.json()) as OpenAIResponsesApiResponse;
-    const extracted = this.extractText(body);
+    let body = attempted.responseBody;
+    let extracted = this.extractResponse(body);
 
     if (extracted.errorMessage) {
       throw new Error(
@@ -103,20 +158,52 @@ export class OpenAIResponsesModelClient implements ModelClient {
     let content = extracted.content;
     let compatibility = extracted.compatibility;
 
-    if (!content.trim()) {
-      content = await this.completeViaStreamingFallback(requestBody);
-      if (content.trim()) {
+    if (!content.trim() && extracted.toolCalls.length === 0 && primaryRequestBody.previous_response_id) {
+      attempted = await this.retryWithoutContinuation(request, primaryRequestBody, attempted, "empty_response");
+      body = attempted.responseBody;
+      extracted = this.extractResponse(body);
+
+      if (extracted.errorMessage) {
+        throw new Error(
+          `OpenAI-compatible provider returned an error payload for model ${this.options.model}: ${extracted.errorMessage}`,
+        );
+      }
+
+      content = extracted.content;
+      compatibility = extracted.compatibility;
+    }
+
+    if (!content.trim() && extracted.toolCalls.length === 0) {
+      const streamingFallback = await this.completeViaStreamingFallback(attempted.requestBody);
+      content = streamingFallback.content;
+
+      if (streamingFallback.toolCalls.length > 0) {
+        extracted.toolCalls = streamingFallback.toolCalls;
+      }
+
+      if (content.trim() || extracted.toolCalls.length > 0) {
         compatibility = {
           status: "degraded",
           path: "responses_streaming_fallback",
-          notes: ["Recovered assistant content through streaming fallback after an empty non-streaming response."],
+          notes: [
+            extracted.toolCalls.length > 0
+              ? "Recovered tool calls through streaming fallback after an empty non-streaming response."
+              : "Recovered assistant content through streaming fallback after an empty non-streaming response.",
+          ],
         };
       }
     }
 
-    if (!content.trim()) {
+    if (!content.trim() && extracted.toolCalls.length === 0) {
       throw new Error(
-        `OpenAI-compatible provider returned no assistant content for model ${this.options.model} after non-streaming normalization and streaming fallback.`,
+        `OpenAI-compatible provider returned no assistant content or tool calls for model ${this.options.model} after non-streaming normalization and streaming fallback.`,
+      );
+    }
+
+    if (attempted.usedContinuationFallback) {
+      compatibility = degradeCompatibility(
+        compatibility,
+        "Recovered by retrying without previous_response_id after continuation failed or returned no usable content.",
       );
     }
 
@@ -126,7 +213,8 @@ export class OpenAIResponsesModelClient implements ModelClient {
       profile: request.profile,
       content,
       compatibility,
-      finishReason: "stop",
+      toolCalls: extracted.toolCalls.length > 0 ? extracted.toolCalls : undefined,
+      finishReason: extracted.toolCalls.length > 0 ? "tool_calls" : extracted.finishReason,
       usage: {
         inputTokens: body.usage?.input_tokens,
         outputTokens: body.usage?.output_tokens,
@@ -140,12 +228,111 @@ export class OpenAIResponsesModelClient implements ModelClient {
     };
   }
 
-  private async completeViaStreamingFallback(requestBody: {
-    model: string;
-    input: Array<{ role: string; content: string }>;
-    max_output_tokens?: number;
-    temperature?: number;
-  }): Promise<string> {
+  private buildRequestBody(
+    request: ModelRequest,
+    options?: {
+      disableContinuation?: boolean;
+    },
+  ): OpenAIResponsesRequestBody {
+    const continuation = request.continuation;
+    const tools = request.tools?.map((tool) => this.toResponsesTool(tool));
+
+    const input = continuation
+      ? this.buildContinuationInput(request.messages, continuation, options?.disableContinuation ?? false)
+      : request.messages.flatMap((message) => this.toInputItems(message));
+
+    return {
+      model: this.options.model,
+      input,
+      previous_response_id: continuation && !options?.disableContinuation ? continuation.previousResponseId : undefined,
+      tools: tools && tools.length > 0 ? tools : undefined,
+      tool_choice: tools && tools.length > 0 ? "auto" : undefined,
+      max_output_tokens: request.maxOutputTokens,
+      temperature: request.temperature,
+    };
+  }
+
+  private buildContinuationInput(
+    messages: ModelMessage[],
+    continuation: ModelContinuationState,
+    disableContinuation: boolean,
+  ): OpenAIResponsesInputItem[] {
+    if (!disableContinuation) {
+      return messages.slice(continuation.continuationMessageIndex).flatMap((message) => this.toInputItems(message));
+    }
+
+    return messages.flatMap((message, index) =>
+      this.toInputItems(
+        message,
+        index === continuation.continuationMessageIndex - 1 ? continuation.assistantToolCalls : undefined,
+      ),
+    );
+  }
+
+  private async executeRequest(body: OpenAIResponsesRequestBody): Promise<{
+    requestBody: OpenAIResponsesRequestBody;
+    responseBody: OpenAIResponsesApiResponse;
+    usedContinuationFallback: boolean;
+  }> {
+    const response = await this.fetchImpl(`${this.baseUrl}/responses`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${this.options.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(`OpenAI responses request failed (${response.status}): ${message}`);
+    }
+
+    return {
+      requestBody: body,
+      responseBody: (await response.json()) as OpenAIResponsesApiResponse,
+      usedContinuationFallback: false,
+    };
+  }
+
+  private async retryWithoutContinuation(
+    request: ModelRequest,
+    primaryBody: OpenAIResponsesRequestBody,
+    attemptedOrReason: RequestAttempt | "transport_error",
+    reason: "transport_error" | "empty_response",
+  ): Promise<RequestAttempt> {
+    const fallbackBody = this.buildRequestBody(request, {
+      disableContinuation: true,
+    });
+
+    if (!primaryBody.previous_response_id) {
+      if (attemptedOrReason === "transport_error") {
+        throw new Error("Continuation retry was requested without a baseline response body.");
+      }
+
+      return attemptedOrReason;
+    }
+
+    try {
+      const retried = await this.executeRequest(fallbackBody);
+      return {
+        ...retried,
+        usedContinuationFallback: true,
+      };
+    } catch (error) {
+      if (reason === "transport_error") {
+        throw error;
+      }
+
+      if (attemptedOrReason === "transport_error") {
+        throw error;
+      }
+
+      return attemptedOrReason;
+    }
+  }
+
+  private async completeViaStreamingFallback(requestBody: OpenAIResponsesRequestBody): Promise<StreamingFallbackResult> {
     const response = await this.fetchImpl(`${this.baseUrl}/responses`, {
       method: "POST",
       headers: {
@@ -165,12 +352,16 @@ export class OpenAIResponsesModelClient implements ModelClient {
 
     const reader = response.body?.getReader();
     if (!reader) {
-      return "";
+      return {
+        content: "",
+        toolCalls: [],
+      };
     }
 
     const decoder = new TextDecoder();
     let buffer = "";
     let aggregated = "";
+    const toolCalls = new Map<string, ModelToolCall>();
 
     while (true) {
       const chunk = await reader.read();
@@ -183,9 +374,13 @@ export class OpenAIResponsesModelClient implements ModelClient {
       buffer = parsed.remainder;
 
       for (const event of parsed.events) {
-        const text = extractTextFromSseEvent(event);
-        if (text) {
-          aggregated += text;
+        const update = extractUpdateFromSseEvent(event);
+        if (update.text) {
+          aggregated += update.text;
+        }
+
+        if (update.toolCall) {
+          toolCalls.set(update.toolCall.id, update.toolCall);
         }
       }
     }
@@ -193,50 +388,108 @@ export class OpenAIResponsesModelClient implements ModelClient {
     if (buffer.trim()) {
       const parsed = consumeSseBuffer(`${buffer}\n\n`);
       for (const event of parsed.events) {
-        const text = extractTextFromSseEvent(event);
-        if (text) {
-          aggregated += text;
+        const update = extractUpdateFromSseEvent(event);
+        if (update.text) {
+          aggregated += update.text;
+        }
+
+        if (update.toolCall) {
+          toolCalls.set(update.toolCall.id, update.toolCall);
         }
       }
     }
 
-    return aggregated;
-  }
-
-  private toInputText(message: ModelMessage): { role: string; content: string } {
     return {
-      role: message.role,
-      content: message.content,
+      content: aggregated,
+      toolCalls: [...toolCalls.values()],
     };
   }
 
-  private extractText(body: OpenAIResponsesApiResponse): ExtractedCompatibilityResponse {
-    const directOutputText = normalizeTextValue(body.output_text);
-    if (directOutputText) {
-      return {
-        content: directOutputText,
-        compatibility: {
-          status: "compatible",
-          path: "responses_output_text",
+  private toInputItems(message: ModelMessage, assistantToolCalls?: ModelToolCall[]): OpenAIResponsesInputItem[] {
+    if (message.role === "tool") {
+      if (!message.toolCallId) {
+        throw new Error("Tool message is missing toolCallId for OpenAI Responses function_call_output continuation.");
+      }
+
+      return [
+        {
+          type: "function_call_output",
+          call_id: message.toolCallId,
+          output: message.content,
         },
-      };
+      ];
     }
 
+    if (message.role === "assistant") {
+      const toolCalls = assistantToolCalls ?? [];
+      if (toolCalls.length > 0) {
+        const items: OpenAIResponsesInputItem[] = [];
+
+        if (message.content.length > 0) {
+          items.push({
+            role: "assistant",
+            content: message.content,
+          });
+        }
+
+        items.push(
+          ...toolCalls.map<OpenAIResponsesInputItem>((toolCall) => ({
+            type: "function_call",
+            call_id: toolCall.id,
+            name: toolCall.name,
+            arguments: JSON.stringify(toolCall.input),
+          })),
+        );
+
+        return items;
+      }
+    }
+
+    return [
+      {
+        role: message.role,
+        content: message.content,
+      },
+    ];
+  }
+
+  private toResponsesTool(tool: ToolDefinition): OpenAIResponsesTool {
+    return {
+      type: "function",
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputSchema ?? {
+        type: "object",
+        additionalProperties: true,
+      },
+      strict: tool.strict,
+    };
+  }
+
+  private extractResponse(body: OpenAIResponsesApiResponse): ExtractedCompatibilityResponse {
+    const nativeToolCalls = body.output?.flatMap((item) => extractNativeToolCall(item)) ?? [];
+    const directOutputText = normalizeTextValue(body.output_text);
     const outputParts = body.output?.flatMap((item) => extractOutputItemText(item)) ?? [];
-    if (outputParts.length > 0) {
+
+    if (directOutputText || outputParts.length > 0 || nativeToolCalls.length > 0) {
       return {
-        content: outputParts.join(""),
+        content: directOutputText || outputParts.join(""),
+        toolCalls: nativeToolCalls,
+        finishReason: nativeToolCalls.length > 0 ? "tool_calls" : "stop",
         compatibility: {
-          status: "native",
-          path: "responses_output",
+          status: directOutputText ? "compatible" : "native",
+          path: directOutputText ? "responses_output_text" : "responses_output",
         },
       };
     }
 
     const choiceParts = body.choices?.flatMap((choice) => extractChoiceText(choice)) ?? [];
-    if (choiceParts.length > 0) {
+    const choiceToolCalls = body.choices?.flatMap((choice) => extractChoiceToolCalls(choice)) ?? [];
+    if (choiceParts.length > 0 || choiceToolCalls.length > 0) {
       return {
         content: choiceParts.join(""),
+        toolCalls: choiceToolCalls,
+        finishReason: choiceToolCalls.length > 0 ? "tool_calls" : "stop",
         compatibility: {
           status: "compatible",
           path: "chat_completions_choices",
@@ -247,12 +500,16 @@ export class OpenAIResponsesModelClient implements ModelClient {
     if (body.error?.message) {
       return {
         content: "",
+        toolCalls: [],
+        finishReason: "error",
         errorMessage: body.error.message,
       };
     }
 
     return {
       content: "",
+      toolCalls: [],
+      finishReason: "stop",
     };
   }
 }
@@ -303,6 +560,81 @@ function extractChoiceText(choice: NonNullable<OpenAIResponsesApiResponse["choic
   return directText ? [directText] : [];
 }
 
+function extractNativeToolCall(
+  item: NonNullable<OpenAIResponsesApiResponse["output"]>[number],
+): ModelToolCall[] {
+  if (item.type !== "function_call") {
+    return [];
+  }
+
+  const id = typeof item.call_id === "string" && item.call_id.length > 0 ? item.call_id : item.id;
+  if (!id || !item.name) {
+    return [];
+  }
+
+  return [
+    {
+      id,
+      name: item.name,
+      input: parseToolArguments(item.arguments, item.name),
+    },
+  ];
+}
+
+function extractChoiceToolCalls(
+  choice: NonNullable<OpenAIResponsesApiResponse["choices"]>[number],
+): ModelToolCall[] {
+  return (
+    choice.message?.tool_calls?.flatMap((toolCall) => {
+      const id = toolCall.id;
+      const name = toolCall.function?.name;
+
+      if (!id || !name) {
+        return [];
+      }
+
+      return [
+        {
+          id,
+          name,
+          input: parseToolArguments(toolCall.function?.arguments, name),
+        },
+      ];
+    }) ?? []
+  );
+}
+
+function parseToolArguments(argumentsText: string | undefined, toolName: string): Record<string, unknown> {
+  if (!argumentsText?.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(argumentsText) as unknown;
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch (error) {
+    throw new Error(
+      `OpenAI-compatible provider returned invalid tool arguments for ${toolName}: ${error instanceof Error ? error.message : "unknown parse failure"}`,
+    );
+  }
+
+  throw new Error(`OpenAI-compatible provider returned non-object tool arguments for ${toolName}.`);
+}
+
+function degradeCompatibility(
+  compatibility: ProviderCompatibility | undefined,
+  note: string,
+): ProviderCompatibility {
+  return {
+    status: "degraded",
+    path: compatibility?.path ?? "responses_output",
+    notes: [...(compatibility?.notes ?? []), note],
+  };
+}
+
 function normalizeTextValue(value: unknown): string {
   if (typeof value === "string") {
     return value;
@@ -336,7 +668,7 @@ function consumeSseBuffer(buffer: string): { events: string[]; remainder: string
   };
 }
 
-function extractTextFromSseEvent(chunk: string): string {
+function extractUpdateFromSseEvent(chunk: string): { text?: string; toolCall?: ModelToolCall } {
   const dataLines = chunk
     .split(/\n/)
     .map((line) => line.trim())
@@ -344,12 +676,12 @@ function extractTextFromSseEvent(chunk: string): string {
     .map((line) => line.slice("data: ".length));
 
   if (dataLines.length === 0) {
-    return "";
+    return {};
   }
 
   const payload = dataLines.join("\n");
   if (payload === "[DONE]") {
-    return "";
+    return {};
   }
 
   try {
@@ -357,18 +689,46 @@ function extractTextFromSseEvent(chunk: string): string {
       type?: string;
       delta?: string;
       text?: string;
+      item?: {
+        type?: string;
+        id?: string;
+        call_id?: string;
+        name?: string;
+        arguments?: string;
+      };
     };
 
     if (parsed.type === "response.output_text.delta" && typeof parsed.delta === "string") {
-      return parsed.delta;
+      return {
+        text: parsed.delta,
+      };
     }
 
     if (parsed.type === "response.output_text.done" && typeof parsed.text === "string") {
-      return "";
+      return {};
+    }
+
+    if (parsed.type === "response.output_item.done" && parsed.item?.type === "function_call") {
+      const id =
+        typeof parsed.item.call_id === "string" && parsed.item.call_id.length > 0
+          ? parsed.item.call_id
+          : parsed.item.id;
+
+      if (!id || !parsed.item.name) {
+        return {};
+      }
+
+      return {
+        toolCall: {
+          id,
+          name: parsed.item.name,
+          input: parseToolArguments(parsed.item.arguments, parsed.item.name),
+        },
+      };
     }
   } catch {
-    return "";
+    return {};
   }
 
-  return "";
+  return {};
 }

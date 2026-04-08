@@ -72,6 +72,16 @@ The important rule is that conversational inference is not itself an approval pa
 
 If the runtime translates assistant output into a repository mutation, that mutation must still be attributable, reviewable, and enforceable through the same safety model as other edit tools.
 
+## Provider And Fallback Rules
+
+Provider transport behavior does not create a second safety path.
+
+In particular:
+
+- provider-native tool calling does not bypass policy evaluation
+- continuation fallback must not silently reclassify a mutating action as safe
+- adapter-owned retries or transport recovery must preserve the same approval and audit semantics as the original tool request
+
 ## Auditability
 
 Every significant action should be recoverable from logs or event artifacts:
@@ -88,9 +98,12 @@ Policy evaluation should be a distinct runtime concern. It should not be hidden 
 Recommended separation:
 
 - `Policy Engine` evaluates the request
-- `Tool Executor` enforces the decision
+- `Tool Orchestrator` routes the request through policy evaluation and approval handling
+- `Tool Executor` enforces the decision for one concrete tool call
 - `Shell` renders a confirmation prompt when needed
 - `Core Runtime` records the decision as an event
+
+The `Provider Adapter` is not allowed to redefine mutating versus read-only policy. It may retry transport, normalize provider behavior, or fall back between continuation strategies, but it must not become a side channel that bypasses recorded policy decisions.
 
 ## Future Questions
 

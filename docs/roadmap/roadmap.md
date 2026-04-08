@@ -104,20 +104,22 @@ Release detail: [releases/0.6.0.md](./releases/0.6.0.md)
 ### 0.7.0 Query Loop And Tool Runtime
 
 - replace task-specific execution branches with a clearer turn-level query loop
-- make tool execution, verification, retry, and stop conditions explicit runtime transitions
+- separate session-owned runtime state from single-turn loop execution more explicitly
 - introduce a real tool registration and orchestration boundary inside core
-- align Code Orb more closely with the Claude Code-derived runtime shape without importing full Claude Code product breadth
+- establish a provider adapter baseline with explicit transport, continuation, and fallback policy
+- align Code Orb more closely with the Claude Code-derived runtime shape in runtime layering, and with the Codex-derived runtime shape in provider robustness, without importing full product breadth from either system
 
 Current status:
 
-- planned
+- released on 2026-04-08
 
 Release detail: [releases/0.7.0.md](./releases/0.7.0.md)
+- checklist: [releases/0.7.0-checklist.md](./releases/0.7.0-checklist.md)
 
 ### 0.8.0 Usable CLI
 
 - move the CLI from an experimental demo toward a tool that can support real local-repository work predictably
-- harden execution, verification, and recovery behavior on common coding tasks
+- harden execution, verification, and recovery behavior on common coding tasks after the `0.7.0` runtime skeleton and provider adapter baseline are stable
 - improve failure reporting, approval clarity, and benchmark-backed reliability
 - prove the CLI is usable before investing in major shell-polish or desktop work
 

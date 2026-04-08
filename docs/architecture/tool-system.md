@@ -27,6 +27,8 @@ This means a tool is not just a function pointer. A tool is a contract plus runt
 - Every tool has a stable name and schema-defined input and output.
 - Tools must declare whether they are read-only or side-effecting.
 - Tools must declare the approval path they require.
+- Tools that may be exposed to model-native tool calling should declare a model-facing input schema.
+- Tool execution should produce a canonical runtime-owned result before any provider-specific wire encoding is applied.
 - Side-effecting tools should return enough metadata to support audit trails.
 - Tool calls should be visible in the session event stream.
 - Tools should do one thing well instead of exposing large ambiguous surfaces.
@@ -42,9 +44,10 @@ The CLI may render tool activity, but it should not redefine tool semantics.
 
 More precisely:
 
-- the `Agent Engine` decides whether to request a tool
+- the `Turn Query Loop` decides whether tool work is required
 - the runtime-owned tool registry decides which tool definitions are available
-- the `Tool Executor` decides how that tool request is validated and executed
+- the `Tool Orchestrator` exposes the active tool definitions to runtime consumers and decides how tool work is validated, grouped, and interpreted
+- the `Tool Executor` decides how one concrete tool request is executed
 - adapters perform the actual side effect
 
 This separation prevents the tool layer from silently turning into a second planner.
@@ -71,6 +74,50 @@ That baseline is:
 `0.6.0` does not require a full dynamic plugin ecosystem.
 
 It does require built-in tools to stop pretending that hardcoded executor-local definitions are the only meaningful registration shape.
+
+## 0.7 Tool Runtime Shape
+
+`0.7.0` extends the baseline into a loop-aware tool runtime:
+
+1. availability
+   - the executor can surface the active tool definitions through the same runtime-owned registration boundary used for execution
+   - model-facing tool availability is derived from the same registrations rather than an adapter-local shadow catalog
+2. invocation
+   - a concrete tool call still routes through validation, policy, backend execution, and events
+3. normalized outcomes
+   - runtime consumers can distinguish:
+     - success
+     - denied
+     - cancelled
+     - invalid input
+     - unknown tool
+     - other execution failure
+4. loop re-entry
+   - tool results can re-enter turn state directly, including model follow-up flows when provider capability allows it
+
+This keeps the runtime from depending on thrown exceptions or CLI-local assumptions to understand what happened during tool execution.
+
+For provider-native tool calling, the adapter may translate the runtime-owned `inputSchema` into the provider's function-parameter descriptor, but the source definition still belongs to the runtime registration boundary.
+
+## Tool Orchestrator Boundary
+
+For the intended `0.7.0` runtime skeleton, tool orchestration is distinct from both the turn loop and the concrete executor.
+
+The `Tool Orchestrator` should own:
+
+- which tools are available for this turn
+- how tool calls are validated before execution
+- how read-only versus mutating calls are grouped or serialized
+- how policy and approval decisions are integrated
+- how raw execution outcomes become canonical runtime-owned tool results
+
+The `Tool Executor` should remain narrower:
+
+- execute one requested tool call
+- return execution metadata and raw success or failure
+- emit execution events
+
+Early implementations may colocate part of this behavior, but the architectural distinction should remain explicit.
 
 ## Generated Edit Execution
 

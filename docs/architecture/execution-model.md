@@ -30,6 +30,13 @@ Examples:
 - in a one-shot CLI command, one invocation usually creates one session with one turn
 - in `orb chat`, one session may contain many turns until the session is cleared or closed
 
+The `Session Engine` owns:
+
+- session lifecycle and session status
+- cross-turn state such as prior-turn summaries and follow-up context
+- artifact persistence and repository-state observation
+- provider-session state that may outlive one turn, such as transport continuation context
+
 ### Turn
 
 A turn corresponds to one user request.
@@ -43,6 +50,8 @@ A turn should own:
 
 For V0.1, the turn-scoped plan should be represented as structured plan items rather than plain strings so future execution tracking is possible without redesigning the contract.
 
+The `Turn Query Loop` owns turn-local orchestration only. It should not become the de facto owner of all session state just because the current implementation is still compact.
+
 ### Step
 
 A step is the smallest orchestration unit inside a turn.
@@ -53,6 +62,14 @@ A step may include:
 - one model interaction
 - zero or more tool calls
 - verification or repair work
+
+The current runtime uses these step kinds:
+
+- `planning` for the initial plan-producing model interaction
+- `context` for deterministic repository inspection
+- `tool_use` for concrete tool execution
+- `verification` for explicit verification commands
+- `model` for follow-up model interactions after tool results re-enter turn state
 
 This means `Turn` is a user-facing boundary, while `Step` is an internal runtime boundary.
 
@@ -75,12 +92,13 @@ The artifact is not a resumable execution checkpoint. It is a persisted session 
 
 Within a turn, the expected flow is:
 
-1. create turn context
-2. gather or refine context
-3. generate or update a short plan
-4. run one or more internal steps
-5. verify results
-6. complete the turn with a structured outcome
+1. process input and decide whether the turn needs model execution
+2. create turn context
+3. gather or refine context
+4. generate or update a short plan
+5. run one or more internal steps
+6. verify results
+7. complete the turn with a structured outcome
 
 ## Step Lifecycle
 
@@ -94,34 +112,72 @@ The initial step lifecycle should stay simple:
 
 ## Current Loop Contract
 
-`0.6.0` does not yet require a full generic multi-iteration query loop, but it does require the current runtime behavior to be described as an explicit loop contract.
+`0.7.0` turns the previously documented baseline into a reusable turn loop.
 
-The current runtime should be interpreted this way:
+The current runtime now interprets one turn this way:
 
-1. create or refine turn context
-2. produce model output or deterministic runtime output
-3. translate any auditable assistant-produced edit into an explicit execution mode when applicable
-4. execute tools and verification through runtime-owned boundaries
-5. feed tool, verification, and policy outcomes back into turn state
-6. decide whether the turn should continue or stop
+1. start a `planning` step and request the initial model response
+2. classify the turn into a runtime intent such as:
+   - plan-only completion
+   - deterministic replace-and-verify
+   - assistant-generated file write
+   - failing-test verification and repair
+   - model/tool loop when provider capability and model response allow it
+3. execute one explicit internal loop iteration at a time
+4. feed tool, verification, and repair outcomes back into turn state rather than bypassing it through branch-local return values
+5. continue until the loop reaches one terminal stop reason
+6. finalize the turn report from loop state, including `stopReason` and step count
 
-This keeps the current runtime honest even when the implementation still resolves many tasks through one dominant execution path instead of a general internal loop.
+This keeps `Turn` as the user-facing boundary while making the internal query loop reusable and inspectable.
+
+## Session Engine Versus Turn Query Loop
+
+For `0.7.0` closeout, Code Orb should treat these as separate runtime responsibilities even if some current classes still colocate them:
+
+- `Session Engine`
+  - owns session lifecycle
+  - owns cross-turn state
+  - owns artifact and repository-state bookkeeping
+  - owns provider-session context
+- `Turn Query Loop`
+  - owns one turn's internal iterations
+  - owns step transitions
+  - owns stop reasons
+  - owns tool, verification, and repair re-entry
+
+`0.8.0` usability work should not need to redefine this boundary.
+
+## Input Processing Boundary
+
+Not every user input should enter the model loop directly.
+
+The runtime should keep an explicit input-processing boundary for work such as:
+
+- slash or shell-local control commands
+- task normalization
+- project-guidance injection
+- local follow-up context assembly
+
+This keeps the turn loop focused on agentic execution rather than becoming a grab bag of shell and preprocessing logic.
 
 ## Continue And Stop Conditions
 
-For the current runtime baseline:
+For the current runtime:
 
-- continue conditions should be explicit
+- continue conditions are explicit
   - more repository context is required before execution can continue
-  - an edit was applied and a verification step is still required
-  - a verification failure re-enters turn state through a bounded repair path
-- stop conditions should be explicit
-  - the requested work reached a terminal turn result
-  - verification reached a terminal passed or failed result for the current runtime path
-  - safety policy denied the next required mutating action
-  - provider or tool execution returned a terminal failure that the current runtime does not repair further
-
-`0.7.0` remains responsible for turning this explicit contract into a reusable multi-iteration turn loop.
+  - a mutating step completed and verification is still required
+  - verification failed and a bounded repair path is still available
+  - a tool result was returned to a tool-calling-capable model and another model step is required
+- stop conditions are explicit through turn `stopReason`
+  - `model_completed`
+  - `task_completed`
+  - `context_unavailable`
+  - `tool_denied`
+  - `tool_failed`
+  - `verification_failed`
+  - `repair_exhausted`
+  - `loop_limit_reached`
 
 ## Retry Behavior
 
@@ -136,6 +192,8 @@ Initial policy:
 - retries are recorded as events
 - verification failures should feed back into turn state, not bypass it
 - hard stops should happen when safety policy denies the next step
+
+Provider transport retries and continuation fallbacks are separate from turn-loop retries. They belong to the provider adapter boundary, not to ad hoc loop branching.
 
 ## Why Turn And Step Are Separate
 
@@ -195,7 +253,7 @@ This extends the CLI from one-shot commands to multi-turn foreground interaction
 
 ## V0.6 Baseline
 
-The `0.6.0` baseline keeps the current implementation intentionally simple while making several semantics explicit:
+The `0.6.0` baseline kept the implementation intentionally simple while making several semantics explicit:
 
 - provider compatibility behavior that affects runtime correctness must be normalized and documented
 - assistant-produced edits should be modeled as explicit runtime edit modes:
@@ -205,6 +263,17 @@ The `0.6.0` baseline keeps the current implementation intentionally simple while
 - generated edit execution, verification, and stop decisions should be observable as runtime behavior rather than inferred only from conversational output
 - the documented current-loop contract should describe real runtime behavior now, even before a fuller reusable loop exists
 
-This is still not a commitment to a fully generic multi-iteration runtime in `0.6.0`.
+This baseline was the contract cleanup step that `0.7.0` now extends into the current explicit turn loop.
 
-That broader loop work remains the responsibility of `0.7.0`.
+## V0.7 Query Loop Runtime
+
+The `0.7.0` runtime now adds:
+
+- an explicit turn loop with bounded internal iterations
+- loop-owned stop reasons recorded in turn state and turn reports
+- a `model` step kind for follow-up model interactions after tool execution
+- verification and repair flows that re-enter the same loop state used by other runtime work
+- capability-aware tool advertisement to the model when the provider supports tool calling
+- adapter-owned continuation behavior for provider-native tool calling, such as prior-response reuse and explicit tool-output handoff
+
+The remaining `0.7.0` closeout work is to make the `Session Engine` versus `Turn Query Loop` ownership model explicit enough that later CLI reliability work does not need to reopen it.

@@ -12,7 +12,10 @@ import {
   LocalSessionStore,
   MemoryEventSink,
   OpenAIResponsesModelClient,
+  StaticToolRegistry,
 } from "@code-orb/core";
+import type { ModelClient } from "@code-orb/core";
+import type { ModelRequest, ModelResponse } from "@code-orb/schemas";
 
 import {
   AllowAllPolicyEngine,
@@ -23,6 +26,48 @@ import {
   ScriptedToolExecutor,
 } from "../../helpers/runtime-fakes";
 import { ensureGitRepository, runGit } from "../../helpers/git";
+
+class ToolCallingModelClient implements ModelClient {
+  readonly provider = "fake-provider";
+  readonly capabilities = {
+    toolCalling: true,
+    streaming: false,
+    structuredOutput: false,
+  };
+
+  requests: ModelRequest[] = [];
+
+  async complete(request: ModelRequest): Promise<ModelResponse> {
+    this.requests.push(request);
+
+    if (this.requests.length === 1) {
+      return {
+        provider: this.provider,
+        model: "fake-tool-model",
+        profile: request.profile,
+        content: "",
+        toolCalls: [
+          {
+            id: "tool_call_1",
+            name: "custom_echo",
+            input: {
+              value: "hello",
+            },
+          },
+        ],
+        finishReason: "tool_calls",
+      };
+    }
+
+    return {
+      provider: this.provider,
+      model: "fake-tool-model",
+      profile: request.profile,
+      content: "Tool call handled and summarized.",
+      finishReason: "stop",
+    };
+  }
+}
 
 describe("BasicSessionRunner", () => {
   it("runs a minimal session-turn-step flow and emits runtime events", async () => {
@@ -822,6 +867,314 @@ describe("BasicSessionRunner", () => {
         expect(editEvent.payload.edit.mode).toBe("targeted_replacement");
         expect(editEvent.payload.edit.path).toBe("README.md");
       }
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("supports a multi-iteration turn where tool results re-enter model state through the shared loop", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+    const modelClient = new ToolCallingModelClient();
+
+    try {
+      const runner = new BasicSessionRunner();
+      const report = await runner.run(
+        {
+          cwd,
+          task: "Inspect the available tool and summarize the result.",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(
+            new StaticToolRegistry([
+              {
+                definition: {
+                  name: "custom_echo",
+                  description: "Echo validated input",
+                  kind: "context",
+                  mutability: "read_only",
+                  approvalRequirement: "auto",
+                },
+                backend: "custom_registry",
+                validateInput: (input) => ({
+                  value: String(input.value ?? ""),
+                }),
+                execute: async (input) => ({
+                  echoed: input.value,
+                }),
+              },
+            ]),
+          ),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient,
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      expect(report.outcome).toBe("completed");
+      expect(report.turnReports[0]?.summary).toBe("Tool call handled and summarized.");
+      expect(report.turnReports[0]?.stopReason).toBe("task_completed");
+      expect(report.turnReports[0]?.stepCount).toBe(3);
+      expect(modelClient.requests).toHaveLength(2);
+      expect(modelClient.requests[0]?.tools?.map((tool) => tool.name)).toEqual(["custom_echo"]);
+      expect(modelClient.requests[1]?.messages.some((message) => message.role === "tool" && message.toolCallId === "tool_call_1")).toBe(true);
+      expect(eventSink.events.filter((event) => event.type === "step.started").map((event) => event.payload.kind)).toEqual([
+        "planning",
+        "tool_use",
+        "model",
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("supports a multi-iteration turn through the OpenAI responses adapter tool-calling path", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "resp_initial",
+          output: [
+            {
+              type: "function_call",
+              id: "fc_1",
+              call_id: "call_1",
+              name: "custom_echo",
+              arguments: '{"value":"hello"}',
+            },
+          ],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "resp_follow_up",
+          output: [
+            {
+              type: "message",
+              content: [
+                {
+                  type: "output_text",
+                  text: "Tool call handled and summarized through the provider adapter.",
+                },
+              ],
+            },
+          ],
+        }),
+      } as Response);
+
+    try {
+      const runner = new BasicSessionRunner();
+      const report = await runner.run(
+        {
+          cwd,
+          task: "Inspect the available tool and summarize the result.",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(
+            new StaticToolRegistry([
+              {
+                definition: {
+                  name: "custom_echo",
+                  description: "Echo validated input",
+                  kind: "context",
+                  mutability: "read_only",
+                  approvalRequirement: "auto",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      value: {
+                        type: "string",
+                      },
+                    },
+                    required: ["value"],
+                    additionalProperties: false,
+                  },
+                },
+                backend: "custom_registry",
+                validateInput: (input) => ({
+                  value: String(input.value ?? ""),
+                }),
+                execute: async (input) => ({
+                  echoed: input.value,
+                }),
+              },
+            ]),
+          ),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new OpenAIResponsesModelClient({
+            apiKey: "test-key",
+            model: "gpt-test",
+            baseUrl: "https://example.com/v1",
+            fetchImpl,
+          }),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      const followUpBody = JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body)) as {
+        previous_response_id?: string;
+        input?: unknown[];
+      };
+
+      expect(report.outcome).toBe("completed");
+      expect(report.turnReports[0]?.summary).toBe("Tool call handled and summarized through the provider adapter.");
+      expect(report.turnReports[0]?.stopReason).toBe("task_completed");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(followUpBody.previous_response_id).toBe("resp_initial");
+      expect(followUpBody.input).toEqual([
+        {
+          type: "function_call_output",
+          call_id: "call_1",
+          output: '{"echoed":"hello"}',
+        },
+      ]);
+      expect(eventSink.events.filter((event) => event.type === "step.started").map((event) => event.payload.kind)).toEqual([
+        "planning",
+        "tool_use",
+        "model",
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to a full replay provider request when continuation fails after a tool call", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "resp_initial",
+          output: [
+            {
+              type: "function_call",
+              id: "fc_1",
+              call_id: "call_1",
+              name: "custom_echo",
+              arguments: '{"value":"hello"}',
+            },
+          ],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        text: async () => '{"error":{"message":"Upstream request failed","type":"upstream_error"}}',
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "resp_follow_up",
+          output: [
+            {
+              type: "message",
+              content: [
+                {
+                  type: "output_text",
+                  text: "Recovered through full replay fallback.",
+                },
+              ],
+            },
+          ],
+        }),
+      } as Response);
+
+    try {
+      const runner = new BasicSessionRunner();
+      const report = await runner.run(
+        {
+          cwd,
+          task: "Inspect the available tool and summarize the result.",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(
+            new StaticToolRegistry([
+              {
+                definition: {
+                  name: "custom_echo",
+                  description: "Echo validated input",
+                  kind: "context",
+                  mutability: "read_only",
+                  approvalRequirement: "auto",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      value: {
+                        type: "string",
+                      },
+                    },
+                    required: ["value"],
+                    additionalProperties: false,
+                  },
+                },
+                backend: "custom_registry",
+                validateInput: (input) => ({
+                  value: String(input.value ?? ""),
+                }),
+                execute: async (input) => ({
+                  echoed: input.value,
+                }),
+              },
+            ]),
+          ),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new OpenAIResponsesModelClient({
+            apiKey: "test-key",
+            model: "gpt-test",
+            baseUrl: "https://example.com/v1",
+            fetchImpl,
+          }),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      const replayBody = JSON.parse(String(fetchImpl.mock.calls[2]?.[1]?.body)) as {
+        previous_response_id?: string;
+        input?: unknown[];
+      };
+
+      expect(report.outcome).toBe("completed");
+      expect(report.turnReports[0]?.summary).toBe("Recovered through full replay fallback.");
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+      expect(replayBody.previous_response_id).toBeUndefined();
+      expect(Array.isArray(replayBody.input)).toBe(true);
+      expect(replayBody.input?.some((item) => (item as { role?: string }).role === "system")).toBe(true);
+      expect(replayBody.input).toContainEqual({
+        role: "user",
+        content: "Inspect the available tool and summarize the result.",
+      });
+      expect(replayBody.input).toContainEqual({
+        type: "function_call",
+        call_id: "call_1",
+        name: "custom_echo",
+        arguments: '{"value":"hello"}',
+      });
+      expect(replayBody.input).toContainEqual({
+        type: "function_call_output",
+        call_id: "call_1",
+        output: '{"echoed":"hello"}',
+      });
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

@@ -13,6 +13,7 @@ Every tool should define:
 - `kind`
 - `mutability`
 - `approvalRequirement`
+- model-facing input schema when provider-native tool calling should expose the tool
 - input shape
 - output shape
 - error shape
@@ -31,7 +32,7 @@ Every tool should define:
 
 ## Registration Versus Invocation
 
-`0.6.0` requires a clearer distinction between two different contract surfaces:
+`0.6.0` required a clearer distinction between two different contract surfaces:
 
 - registration contract
   - what a tool is, what it is called, what mutability it has, what approval path it expects, and what execution semantics it declares
@@ -41,6 +42,30 @@ Every tool should define:
 This distinction matters even when the runtime still ships only built-in tools.
 
 It keeps the tool system extensible without turning the current implementation into a plugin platform prematurely.
+
+## 0.7 Runtime-Facing Contract
+
+`0.7.0` extends that distinction in two ways:
+
+- registration is now also the source of model-facing tool availability when provider capability allows tool calling
+- invocation results should normalize into runtime-meaningful dispositions rather than forcing the loop to infer behavior only from exceptions or free-form text
+
+That means the runtime can ask two separate questions explicitly:
+
+1. what tools are available for this turn?
+2. what happened when this concrete tool call ran?
+
+For providers such as OpenAI Responses, the adapter may additionally ask:
+
+3. what parameter schema should the model see for this tool?
+
+That question is answered from the runtime-owned `ToolDefinition`, not from adapter-local hardcoding.
+
+The runtime should also answer a separate question before provider mapping happens:
+
+4. what is the canonical runtime-owned result of this tool invocation?
+
+That canonical result should exist before any provider-specific `function_call_output` or similar wire encoding is chosen.
 
 ## Example Logical Contracts
 
@@ -54,6 +79,7 @@ It keeps the tool system extensible without turning the current implementation i
 
 - registration: mutating execution tool with declared approval behavior and possible timeout semantics
 - input: command, working directory, timeout, approval context
+- model-facing schema: one string `command` field when exposed through provider-native tool calling
 - output: exit code, stdout, stderr, duration, policy and execution metadata
 
 ## Generated Edit Relationship

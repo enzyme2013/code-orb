@@ -202,4 +202,33 @@ describe("BasicToolExecutor", () => {
     });
     expect(outcome.result.metadata.backend).toBe("custom_registry");
   });
+
+  it("lists tool definitions from the active registry boundary", () => {
+    const executor = new BasicToolExecutor(
+      new StaticToolRegistry([
+        {
+          definition: {
+            name: "custom_echo",
+            description: "Echo validated input",
+            kind: "context",
+            mutability: "read_only",
+            approvalRequirement: "auto",
+          },
+          execute: async () => ({
+            echoed: true,
+          }),
+        },
+      ]),
+    );
+
+    expect(executor.listTools()).toEqual([
+      {
+        name: "custom_echo",
+        description: "Echo validated input",
+        kind: "context",
+        mutability: "read_only",
+        approvalRequirement: "auto",
+      },
+    ]);
+  });
 });

@@ -19,9 +19,9 @@ This document focuses on the logical layer view. The runtime view is covered fur
 flowchart TB
   SHELL["Shell Layer<br/>CLI / Future Desktop"]
 
-  CORE["Core Runtime Layer<br/>Session / Turn Manager<br/>Agent Engine<br/>Tool Executor<br/>Policy Engine<br/>Event / Report Infra"]
+  CORE["Core Runtime Layer<br/>Session Engine<br/>Input Processing<br/>Turn Query Loop<br/>Tool Orchestrator<br/>Policy Engine<br/>Event / Report Infra"]
 
-  ADAPTERS["Adapter / Execution Harness Layer<br/>Provider<br/>Filesystem<br/>Process<br/>Git<br/>Future MCP"]
+  ADAPTERS["Adapter / Execution Harness Layer<br/>Provider Adapter<br/>Filesystem<br/>Process<br/>Git<br/>Future MCP"]
 
   CONTRACTS["Contract Layer<br/>Tool / Event / Config Contracts"]
 
@@ -44,12 +44,13 @@ Shell Layer
 
 Core Runtime Layer
   packages/core
-  Responsibility: session/turn execution semantics, agent loop, context engineering,
+  Responsibility: session-owned runtime state, input processing, turn-loop execution,
   tool orchestration, policy decisions, event/report generation
 
 Adapter / Execution Harness Layer
   Initially colocated under packages/core as needed
-  Responsibility: provider transport, filesystem, process execution, git, future MCP
+  Responsibility: provider transport and continuation policy, filesystem,
+  process execution, git, future MCP
 
 Contract Layer
   packages/schemas
@@ -102,15 +103,22 @@ Rules:
 Within `packages/core`, the intended internal structure is:
 
 ```text
-Session / Turn Manager
-  Owns session lifecycle, turn boundaries, and step progression
+Session Engine
+  Owns session lifecycle, cross-turn state, artifact assembly, and provider-session context
 
-Agent Engine
-  Owns step-level orchestration, context engineering, model interaction,
-  stop/retry decisions, and verification handoff
+Input Processing
+  Owns task normalization, local command routing, and project/runtime context injection
+
+Turn Query Loop
+  Owns step-level orchestration, model interaction, stop/retry decisions,
+  verification handoff, and tool-result re-entry within one turn
+
+Tool Orchestrator
+  Owns tool availability, batching policy, validation routing, canonical tool results,
+  and the boundary between loop decisions and concrete tool execution
 
 Tool Executor
-  Owns tool dispatch, validation, execution metadata, and event emission
+  Owns concrete invocation, execution metadata, and event emission for one requested tool call
 
 Policy Engine
   Owns allow / confirm / deny decisions and approval requests
@@ -118,11 +126,21 @@ Policy Engine
 Event / Report Infrastructure
   Owns structured event production and final report assembly
 
-Adapters
-  Own provider transport, filesystem, process, git, and future external integrations
+Provider Adapter
+  Owns transport selection, response normalization, continuation state,
+  fallback policy, and capability exposure
+
+Execution Adapters
+  Own filesystem, process, git, and future external integrations
 ```
 
-The important separation is that the `Agent Engine` decides what should happen next, while the `Tool Executor` decides how a requested tool invocation is actually executed.
+The important separations are:
+
+- the `Session Engine` owns long-lived state; the `Turn Query Loop` owns one turn's iterative execution
+- the `Turn Query Loop` decides what should happen next; the `Tool Orchestrator` decides how tool work is shaped for execution
+- the `Provider Adapter` owns provider transport and fallback behavior; the loop consumes normalized model behavior instead of transport quirks
+
+The current implementation still colocates parts of these responsibilities in a smaller set of classes. This document defines the intended `0.7.0` closeout boundary so later shells and reliability work do not inherit one oversized engine object accidentally.
 
 ## Tool Placement
 
@@ -139,10 +157,12 @@ This prevents the core runtime from being locked to one filesystem, one provider
 The intended runtime flow is:
 
 1. CLI receives either a one-shot task or an interactive shell command.
-2. CLI creates a session and hands execution to `packages/core`.
-3. Core gathers context, plans, invokes tools, applies edits, and runs verification per turn.
-4. Core emits structured events defined in `packages/schemas`.
-5. CLI renders progress and turn/session reporting to the terminal.
+2. CLI creates or resumes a session and hands execution to `packages/core`.
+3. Core processes the input, decides whether local handling is sufficient, and otherwise enters the turn query loop.
+4. The turn query loop gathers context, invokes tools, applies edits, runs verification, and may iterate internally before one turn completes.
+5. Provider adapters normalize model behavior and own any transport or continuation fallback needed to sustain the loop.
+6. Core emits structured events defined in `packages/schemas`.
+7. CLI renders progress and turn/session reporting to the terminal.
 
 For `0.5.0`, `apps/cli` now also owns the interactive foreground loop for `orb chat`, but the loop is only a shell concern.
 
@@ -178,11 +198,14 @@ This baseline is intentionally narrower than `0.7.0`.
 
 - `apps/cli` should not own business logic that future shells also need.
 - `packages/core` owns execution semantics and orchestration.
+- session-owned state should not be conflated with one turn's internal loop state.
 - adapters should isolate provider, process, filesystem, and git details from core semantics.
+- provider transport and continuation policy should remain adapter-owned rather than leaking into shell or tool logic.
 - `packages/schemas` owns stable cross-boundary shapes.
 - `packages/shared` must stay small and generic; it is not a dumping ground.
 - structured events are runtime infrastructure, not ad hoc CLI logging.
 - provider compatibility handling that affects correctness must not be hidden in CLI fallback code.
+- tool-result wire encoding for one provider must not silently become the runtime's canonical tool-result contract.
 - generated edit mode classification and execution must remain runtime behavior, not shell parsing behavior.
 - tool registration and lookup boundaries must remain runtime-owned even when only built-in tools exist.
 
@@ -195,8 +218,10 @@ The same principle applies to future multi-provider support: provider-specific t
 ## Related Docs
 
 - [execution-model.md](./execution-model.md)
+- [provider-runtime.md](./provider-runtime.md)
 - [tool-system.md](./tool-system.md)
 - [safety-model.md](./safety-model.md)
 - [events.md](./protocols/events.md)
+- [model-contracts.md](./protocols/model-contracts.md)
 - [tool-contracts.md](./protocols/tool-contracts.md)
 - [config-schema.md](./protocols/config-schema.md)
