@@ -45,6 +45,7 @@ Current status:
 - released on 2026-04-06
 
 Release detail: [releases/0.2.0.md](./releases/0.2.0.md)
+
 - checklist: [releases/0.2.0-checklist.md](./releases/0.2.0-checklist.md)
 
 ### 0.3.0 Edit And Verify
@@ -70,6 +71,7 @@ Current status:
 - released on 2026-04-06
 
 Release detail: [releases/0.4.0.md](./releases/0.4.0.md)
+
 - todo: [releases/0.4.0-todo.md](./releases/0.4.0-todo.md)
 
 ### 0.5.0 Interactive CLI
@@ -114,6 +116,7 @@ Current status:
 - released on 2026-04-08
 
 Release detail: [releases/0.7.0.md](./releases/0.7.0.md)
+
 - checklist: [releases/0.7.0-checklist.md](./releases/0.7.0-checklist.md)
 
 ### 0.8.0 Usable CLI
@@ -142,10 +145,11 @@ Current status:
 
 Release detail: [releases/0.9.0.md](./releases/0.9.0.md)
 
-### 0.10.0 Workspace Context And Configuration
+### 0.10.0 Workspace Context, Identity, And Configuration
 
-- make project guidance, runtime configuration, and provider selection first-class parts of normal use
-- expand beyond minimal `AGENTS.md` support into a clearer instruction and configuration model
+- make project guidance, agent identity, runtime configuration, and provider selection first-class parts of normal use
+- expand beyond minimal `AGENTS.md` support into a clearer instruction, identity, and configuration model
+- add a `SOUL.md`-style identity profile surface that is explicit and inspectable instead of hidden prompt folklore
 - add provider profiles and configuration behavior that are explicit instead of environment-variable folklore
 
 Current status:
@@ -157,6 +161,7 @@ Release detail: [releases/0.10.0.md](./releases/0.10.0.md)
 ### 0.11.0 Memory And Skills
 
 - add explicit, inspectable memory beyond the current narrow session-follow-up model
+- define how optional external memory sources can feed that model only through explicit, reviewable records
 - support reusable project or user skills without collapsing them into the tool layer
 - improve continuity and repeatability for guided coding workflows
 
@@ -170,7 +175,7 @@ Release detail: [releases/0.11.0.md](./releases/0.11.0.md)
 
 - open a deliberate path for external tool ecosystems after the core runtime, CLI usability, and skill model are already in place
 - define MCP and plugin boundaries without turning the runtime into a marketplace-first product
-- keep extension behavior aligned with core tool, event, and safety contracts
+- keep external tool and external memory integration behavior aligned with core tool, memory, event, and safety contracts
 
 Current status:
 
@@ -183,6 +188,7 @@ Release detail: [releases/0.12.0.md](./releases/0.12.0.md)
 - desktop-oriented shells remain intentionally deferred until after the CLI is usable, ergonomically solid, and context-aware
 - any future desktop milestone should build on the explicit runtime loop and tool runtime established earlier, rather than introducing them for the first time
 - generalized multi-agent or delegation work should remain later than the instruction, memory, skill, and extension-boundary milestones
+- soul-style identity profiles and optional external memory integrations should remain explicit and inspectable rather than becoming hidden runtime side channels
 
 ## Roadmap Rules
 
