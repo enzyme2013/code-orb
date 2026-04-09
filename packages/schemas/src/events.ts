@@ -1,7 +1,7 @@
 import type { EventId, SessionId, StepId, Timestamp, TurnId } from "./ids.js";
 import type { ModelProfile, ProviderCompatibility } from "./model.js";
-import type { PermissionDecision } from "./policy.js";
-import type { AppliedEdit, SessionReport, TurnReport, ValidationResult } from "./report.js";
+import type { ApprovalRequest, ApprovalResponse, PermissionDecision } from "./policy.js";
+import type { AppliedEdit, ProjectInstructionSource, SessionReport, TurnReport, ValidationResult } from "./report.js";
 import type { TurnPlan } from "./runtime.js";
 import type { ToolCallRequest, ToolExecutionResult } from "./tools.js";
 
@@ -12,6 +12,8 @@ export type RuntimeEventType =
   | "assistant.message"
   | "plan.generated"
   | "edit.applied"
+  | "approval.requested"
+  | "approval.completed"
   | "tool.started"
   | "tool.finished"
   | "tool.denied"
@@ -36,6 +38,7 @@ export type SessionStartedEvent = RuntimeEventEnvelope<
   {
     task: string;
     cwd: string;
+    projectInstructions?: ProjectInstructionSource[];
   }
 >;
 
@@ -78,6 +81,23 @@ export type EditAppliedEvent = RuntimeEventEnvelope<
   "edit.applied",
   {
     edit: AppliedEdit;
+  }
+>;
+
+export type ApprovalRequestedEvent = RuntimeEventEnvelope<
+  "approval.requested",
+  {
+    request: ToolCallRequest;
+    approvalRequest: ApprovalRequest;
+  }
+>;
+
+export type ApprovalCompletedEvent = RuntimeEventEnvelope<
+  "approval.completed",
+  {
+    request: ToolCallRequest;
+    approvalRequest: ApprovalRequest;
+    approvalResponse: ApprovalResponse;
   }
 >;
 
@@ -147,6 +167,8 @@ export type RuntimeEvent =
   | AssistantMessageEvent
   | PlanGeneratedEvent
   | EditAppliedEvent
+  | ApprovalRequestedEvent
+  | ApprovalCompletedEvent
   | ToolStartedEvent
   | ToolFinishedEvent
   | ToolDeniedEvent

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,6 +11,7 @@ import {
   LocalGitStateReader,
   LocalSessionStore,
   MemoryEventSink,
+  MinimumPolicyEngine,
   OpenAIResponsesModelClient,
   StaticToolRegistry,
 } from "@code-orb/core";
@@ -69,6 +70,42 @@ class ToolCallingModelClient implements ModelClient {
   }
 }
 
+class MissingToolModelClient implements ModelClient {
+  readonly provider = "fake-provider";
+  readonly capabilities = {
+    toolCalling: true,
+    streaming: false,
+    structuredOutput: false,
+  };
+
+  async complete(request: ModelRequest): Promise<ModelResponse> {
+    if (request.messages.some((message) => message.role === "tool")) {
+      return {
+        provider: this.provider,
+        model: "fake-tool-model",
+        profile: request.profile,
+        content: "This follow-up should never be reached.",
+        finishReason: "stop",
+      };
+    }
+
+    return {
+      provider: this.provider,
+      model: "fake-tool-model",
+      profile: request.profile,
+      content: "",
+      toolCalls: [
+        {
+          id: "tool_call_missing",
+          name: "missing_tool",
+          input: {},
+        },
+      ],
+      finishReason: "tool_calls",
+    };
+  }
+}
+
 describe("BasicSessionRunner", () => {
   it("runs a minimal session-turn-step flow and emits runtime events", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
@@ -106,6 +143,80 @@ describe("BasicSessionRunner", () => {
         "plan.generated",
         "turn.completed",
         "session.completed",
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("loads repository instructions into planning context and reports their source", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const runner = new BasicSessionRunner();
+    const modelClient = new FakeModelClient("Create a short execution summary.");
+    const sessionStore = new LocalSessionStore();
+
+    try {
+      await writeFile(join(cwd, "AGENTS.md"), "# Repo Rules\n\n- Keep summaries short.\n", "utf8");
+
+      const report = await runner.run(
+        {
+          cwd,
+          task: "summarize the next action",
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new NoopToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient,
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      expect(report.projectInstructions).toEqual([
+        {
+          path: "AGENTS.md",
+          source: "repository",
+        },
+      ]);
+      expect(report.turnReports[0]?.projectInstructions).toEqual([
+        {
+          path: "AGENTS.md",
+          source: "repository",
+        },
+      ]);
+
+      const planningRequest = modelClient.requests[0];
+      expect(
+        planningRequest?.messages.some(
+          (message) =>
+            message.role === "system" &&
+            message.content.includes("Repository guidance is active for this run.") &&
+            message.content.includes("Source: AGENTS.md") &&
+            message.content.includes("Keep summaries short."),
+        ),
+      ).toBe(true);
+
+      const sessionStarted = eventSink.events.find((event) => event.type === "session.started");
+      expect(sessionStarted?.type).toBe("session.started");
+      if (sessionStarted?.type === "session.started") {
+        expect(sessionStarted.payload.projectInstructions).toEqual([
+          {
+            path: "AGENTS.md",
+            source: "repository",
+          },
+        ]);
+      }
+
+      const artifact = await sessionStore.load(cwd, report.sessionId);
+      expect(artifact?.projectInstructions).toEqual([
+        {
+          path: "AGENTS.md",
+          source: "repository",
+        },
       ]);
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -216,6 +327,14 @@ describe("BasicSessionRunner", () => {
       );
 
       expect(report.outcome).toBe("completed");
+      expect(report.turnReports[0]?.notes).toEqual([
+        "Provider compatibility path: responses_streaming_fallback",
+        "Recovered assistant content through streaming fallback after an empty non-streaming response.",
+      ]);
+      expect(report.notes).toEqual([
+        "Provider compatibility path: responses_streaming_fallback",
+        "Recovered assistant content through streaming fallback after an empty non-streaming response.",
+      ]);
 
       const assistantEvent = eventSink.events.find((event) => event.type === "assistant.message");
       expect(assistantEvent?.type).toBe("assistant.message");
@@ -226,6 +345,75 @@ describe("BasicSessionRunner", () => {
           notes: ["Recovered assistant content through streaming fallback after an empty non-streaming response."],
         });
       }
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("records mutating action lifecycle for approved edit and verification steps", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const runner = new BasicSessionRunner();
+
+    try {
+      await writeFile(join(cwd, "README.md"), "__CODE_ORB_PLACEHOLDER__\n", "utf8");
+      await writeFile(join(cwd, "verify.mjs"), "process.exit(0);\n", "utf8");
+
+      const report = await runner.run(
+        {
+          cwd,
+          task: 'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+        },
+        {
+          eventSink: new MemoryEventSink(),
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new MinimumPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new FakeModelClient("Create a short execution summary."),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore: new LocalSessionStore(),
+        },
+      );
+
+      expect(report.turnReports[0]?.mutatingActions).toEqual([
+        {
+          toolName: "apply_patch",
+          status: "requested",
+          summary: "Approve apply_patch on README.md",
+          path: "README.md",
+        },
+        {
+          toolName: "apply_patch",
+          status: "approved",
+          summary: "apply_patch was approved for execution.",
+          path: "README.md",
+        },
+        {
+          toolName: "apply_patch",
+          status: "applied",
+          summary: "apply_patch changed README.md.",
+          path: "README.md",
+        },
+        {
+          toolName: "run_command",
+          status: "requested",
+          summary: "Approve run_command: node verify.mjs",
+          command: "node verify.mjs",
+        },
+        {
+          toolName: "run_command",
+          status: "approved",
+          summary: "run_command was approved for execution.",
+          command: "node verify.mjs",
+        },
+        {
+          toolName: "run_command",
+          status: "completed",
+          summary: "run_command completed successfully.",
+          command: "node verify.mjs",
+        },
+      ]);
+      expect(report.mutatingActions).toHaveLength(6);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -928,6 +1116,39 @@ describe("BasicSessionRunner", () => {
         "tool_use",
         "model",
       ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reports an actionable failure when the model requests an unknown tool", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const runner = new BasicSessionRunner();
+
+    try {
+      const report = await runner.run(
+        {
+          cwd,
+          task: "Inspect the available tool and summarize the result.",
+        },
+        {
+          eventSink: new MemoryEventSink(),
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new AllowAllPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new MissingToolModelClient(),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore: new LocalSessionStore(),
+        },
+      );
+
+      expect(report.outcome).toBe("failed");
+      expect(report.turnReports[0]?.summary).toBe("missing_tool is not available in the current runtime.");
+      expect(report.turnReports[0]?.risks).toEqual([
+        "The runtime could not continue because missing_tool is not a registered tool.",
+      ]);
+      expect(report.turnReports[0]?.notes).toContain("Unknown tool: missing_tool");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

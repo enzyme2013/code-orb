@@ -14,6 +14,7 @@ describe("buildFollowUpContext", () => {
       savedAt: "2026-04-06T00:00:11.000Z",
       outcome: "completed",
       summary: "Updated the implementation and verified the result.",
+      notes: ["Provider compatibility path: responses_streaming_fallback"],
       changedFiles: ["src/index.ts"],
       validations: [{ name: "pnpm test", status: "passed" }],
       risks: [],
@@ -28,6 +29,7 @@ describe("buildFollowUpContext", () => {
       priorChangedFiles: ["src/index.ts"],
       priorValidations: [{ name: "pnpm test", status: "passed" }],
       priorRisks: [],
+      priorNotes: ["Provider compatibility path: responses_streaming_fallback"],
     });
   });
 });

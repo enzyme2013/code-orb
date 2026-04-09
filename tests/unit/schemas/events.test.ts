@@ -12,11 +12,18 @@ describe("event contracts", () => {
       payload: {
         task: "fix failing tests",
         cwd: "/repo",
+        projectInstructions: [
+          {
+            path: "AGENTS.md",
+            source: "repository",
+          },
+        ],
       },
     } satisfies RuntimeEvent;
 
     expect(event.type).toBe("session.started");
     expect(event.payload.task).toBe("fix failing tests");
+    expect(event.payload.projectInstructions?.[0]?.path).toBe("AGENTS.md");
   });
 
   it("supports structured tool denial events", () => {
@@ -95,5 +102,49 @@ describe("event contracts", () => {
     expect(event.type).toBe("edit.applied");
     expect(event.payload.edit.mode).toBe("generated_create");
     expect(event.payload.edit.targetSource).toBe("inferred");
+  });
+
+  it("supports explicit approval lifecycle events", () => {
+    const event = {
+      id: "evt_5",
+      sessionId: "ses_1",
+      turnId: "turn_1",
+      stepId: "step_2",
+      type: "approval.completed",
+      timestamp: "2026-04-09T00:00:03.000Z",
+      payload: {
+        request: {
+          id: "call_1",
+          sessionId: "ses_1",
+          turnId: "turn_1",
+          stepId: "step_2",
+          toolName: "apply_patch",
+          input: {
+            path: "README.md",
+            searchText: "old",
+            replaceText: "new",
+          },
+          requestedAt: "2026-04-09T00:00:02.000Z",
+        },
+        approvalRequest: {
+          id: "approval_1",
+          sessionId: "ses_1",
+          turnId: "turn_1",
+          stepId: "step_2",
+          toolCallId: "call_1",
+          summary: "Approve apply_patch on README.md",
+          scope: "once",
+        },
+        approvalResponse: {
+          requestId: "approval_1",
+          decision: "approved",
+          scope: "once",
+          respondedAt: "2026-04-09T00:00:03.000Z",
+        },
+      },
+    } satisfies RuntimeEvent;
+
+    expect(event.type).toBe("approval.completed");
+    expect(event.payload.approvalResponse.decision).toBe("approved");
   });
 });

@@ -87,6 +87,8 @@ In particular:
 Every significant action should be recoverable from logs or event artifacts:
 
 - what action was requested
+- whether approval was requested
+- whether approval was granted or rejected
 - what policy was applied
 - what actually ran
 - what changed
@@ -102,6 +104,11 @@ Recommended separation:
 - `Tool Executor` enforces the decision for one concrete tool call
 - `Shell` renders a confirmation prompt when needed
 - `Core Runtime` records the decision as an event
+
+For the `0.8.0` usability baseline, this recorded surface should be visible in both:
+
+- approval lifecycle events
+- turn/session reporting and persisted session artifacts for mutating actions
 
 The `Provider Adapter` is not allowed to redefine mutating versus read-only policy. It may retry transport, normalize provider behavior, or fall back between continuation strategies, but it must not become a side channel that bypasses recorded policy decisions.
 

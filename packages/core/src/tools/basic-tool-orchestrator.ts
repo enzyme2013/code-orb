@@ -22,6 +22,10 @@ export class BasicToolOrchestrator implements ToolOrchestrator {
 
     return {
       definition,
+      request,
+      decision: outcome.decision,
+      approvalRequest: outcome.approvalRequest,
+      approvalResponse: outcome.approvalResponse,
       disposition: normalized.disposition,
       canonical: createCanonicalToolResult(outcome.result),
     };

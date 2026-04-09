@@ -16,3 +16,4 @@ Current milestone-aligned benchmarks:
 - `approval-denied/` for the `0.3.0` blocked-edit reporting path
 - `existing-changes-awareness/` for the `0.4.0` repository-awareness path
 - `session-follow-up/` for the `0.4.0` prior-session continuity path
+- `project-instructions/` for the `0.8.0` repository-guidance intake and reporting path

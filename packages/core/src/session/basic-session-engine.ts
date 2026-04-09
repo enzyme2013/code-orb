@@ -16,6 +16,7 @@ import { createRuntimeId, createTimestamp } from "../internal/runtime-utils.js";
 import { BasicToolOrchestrator } from "../tools/basic-tool-orchestrator.js";
 import { classifyRepositoryChanges } from "./change-classifier.js";
 import type { AgentExecutionContext } from "../engine/agent-engine.js";
+import { loadProjectInstructions, toProjectInstructionSources } from "./project-instructions.js";
 import type { SessionRunnerContext } from "./session-runner.js";
 import type { SessionEngine } from "./session-engine.js";
 
@@ -204,6 +205,9 @@ export class BasicSessionEngine implements SessionEngine {
       outcome: report.outcome,
       followUpFromSessionId: report.followUpFromSessionId,
       summary: report.summary,
+      notes: report.notes,
+      projectInstructions: report.projectInstructions,
+      mutatingActions: report.mutatingActions,
       changedFiles: [...changedFiles],
       validations,
       risks: [...risks],
@@ -254,6 +258,7 @@ export class BasicSessionEngine implements SessionEngine {
     }
 
     session.gitSnapshotBefore = await context.gitStateReader.readSnapshot(session.cwd);
+    session.projectInstructions = await loadProjectInstructions(session.cwd);
     session.status = "running";
 
     context.eventSink.emit({
@@ -264,6 +269,7 @@ export class BasicSessionEngine implements SessionEngine {
       payload: {
         task: session.task,
         cwd: session.cwd,
+        projectInstructions: toProjectInstructionSources(session.projectInstructions),
       },
     });
   }
@@ -278,6 +284,8 @@ export class BasicSessionEngine implements SessionEngine {
     const turnReports = session.turns.flatMap((turn) => (turn.report ? [turn.report] : []));
     const latestTurnReport = turnReports[turnReports.length - 1];
     const summary = latestTurnReport?.summary ?? session.task;
+    const notes = [...new Set(turnReports.flatMap((turnReport) => turnReport.notes ?? []))];
+    const mutatingActions = turnReports.flatMap((turnReport) => turnReport.mutatingActions ?? []);
 
     return {
       sessionId: session.id,
@@ -287,6 +295,9 @@ export class BasicSessionEngine implements SessionEngine {
       startedAt: session.startedAt,
       endedAt: session.endedAt,
       followUpFromSessionId: getFollowUpFromSessionId(session.metadata),
+      notes: notes.length > 0 ? notes : undefined,
+      projectInstructions: toProjectInstructionSources(session.projectInstructions),
+      mutatingActions: mutatingActions.length > 0 ? mutatingActions : undefined,
     };
   }
 
@@ -354,6 +365,7 @@ export class BasicSessionEngine implements SessionEngine {
       policyEngine: context.policyEngine,
       approvalResolver: context.approvalResolver,
       followUpContext: this.resolveFollowUpContext(session),
+      projectInstructions: session.projectInstructions,
     };
   }
 
@@ -377,6 +389,7 @@ export class BasicSessionEngine implements SessionEngine {
       priorChangedFiles: previousTurn.filesChanged ?? [],
       priorValidations: previousTurn.validations ?? [],
       priorRisks: previousTurn.risks ?? [],
+      priorNotes: previousTurn.notes,
     };
   }
 }

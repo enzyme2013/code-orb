@@ -27,6 +27,7 @@ Every event should conceptually include:
 - `session.*`
 - `assistant.*`
 - `plan.*`
+- `approval.*`
 - `tool.*`
 - `edit.*`
 - `verify.*`
@@ -61,6 +62,8 @@ The minimum useful event set for V0 is:
 - `assistant.message`
 - `plan.generated`
 - `edit.applied`
+- `approval.requested`
+- `approval.completed`
 - `tool.started`
 - `tool.finished`
 - `tool.denied`
@@ -109,3 +112,17 @@ Provider continuation and fallback semantics should also remain observable, whet
 - future dedicated provider-runtime event families if the compact catalog stops being sufficient
 
 Consumers should not have to guess whether a turn stopped because the loop made a decision or because the provider adapter hit a continuation or transport boundary.
+
+## 0.8 Event Implications
+
+`0.8.0` extends the compact event model in two usability-oriented ways:
+
+- mutating approval flow is now explicit through:
+  - `approval.requested`
+  - `approval.completed`
+- repository guidance and degraded provider behavior are expected to remain visible in report payloads and related session events through:
+  - `projectInstructions`
+  - report `notes`
+  - report `mutatingActions`
+
+This keeps the event catalog relatively small while making approval lifecycle and repository-guidance visibility inspectable enough for real CLI use, saved artifacts, and benchmark assertions.

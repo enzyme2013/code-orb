@@ -9,5 +9,6 @@ export function buildFollowUpContext(artifact: SessionArtifact): FollowUpContext
     priorChangedFiles: artifact.changedFiles,
     priorValidations: artifact.validations,
     priorRisks: artifact.risks,
+    priorNotes: artifact.notes,
   };
 }

@@ -1,6 +1,6 @@
 import type { SessionId, StepId, Timestamp, ToolCallId, TurnId } from "./ids.js";
 import type { ProviderRuntimeState } from "./model.js";
-import type { SessionOutcome, TurnReport, TurnStopReason, ValidationResult } from "./report.js";
+import type { ProjectInstructionSource, SessionOutcome, TurnReport, TurnStopReason, ValidationResult } from "./report.js";
 import type { GitWorkingTreeSnapshot } from "./session-artifact.js";
 
 export type SessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
@@ -17,6 +17,11 @@ export interface FollowUpContext {
   priorChangedFiles: string[];
   priorValidations: ValidationResult[];
   priorRisks: string[];
+  priorNotes?: string[];
+}
+
+export interface LoadedProjectInstruction extends ProjectInstructionSource {
+  content: string;
 }
 
 export interface SessionMetadata {
@@ -88,6 +93,7 @@ export interface SessionRuntimeState {
   turns: TurnRuntimeState[];
   interactive?: boolean;
   metadata?: SessionMetadata;
+  projectInstructions?: LoadedProjectInstruction[];
   providerState?: ProviderRuntimeState;
   gitSnapshotBefore?: GitWorkingTreeSnapshot;
 }

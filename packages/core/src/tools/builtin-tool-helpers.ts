@@ -18,7 +18,7 @@ export class BuiltinToolError extends Error {
   }
 }
 
-const DEFAULT_IGNORES = new Set([".git", "node_modules", "dist", "coverage"]);
+const DEFAULT_IGNORES = new Set([".git", ".orb", "node_modules", "dist", "coverage"]);
 
 export function resolveRepoPath(cwd: string, targetPath: string): string {
   return resolve(cwd, targetPath);

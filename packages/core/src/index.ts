@@ -21,6 +21,7 @@ export { BasicSessionEngine } from "./session/basic-session-engine.js";
 export { BasicSessionRunner } from "./session/basic-session-runner.js";
 export { classifyRepositoryChanges } from "./session/change-classifier.js";
 export { buildFollowUpContext } from "./session/follow-up-context.js";
+export { loadProjectInstructions } from "./session/project-instructions.js";
 export { LocalSessionStore } from "./session/session-store.js";
 export type { SessionEngine } from "./session/session-engine.js";
 export type { SessionRunner, SessionRunnerContext } from "./session/session-runner.js";

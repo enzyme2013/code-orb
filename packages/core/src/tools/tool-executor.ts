@@ -1,4 +1,5 @@
 import type {
+  ApprovalRequest,
   ApprovalResponse,
   PermissionDecision,
   PolicyContext,
@@ -19,6 +20,7 @@ export interface ToolExecutionContext {
 
 export interface ToolExecutionOutcome {
   decision: PermissionDecision;
+  approvalRequest?: ApprovalRequest;
   approvalResponse?: ApprovalResponse;
   result: ToolExecutionResult;
 }

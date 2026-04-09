@@ -20,7 +20,7 @@ Release status:
 - `0.5.0` Interactive CLI: released on 2026-04-08
 - `0.6.0` Extensibility: released on 2026-04-08
 - `0.7.0` Query Loop And Tool Runtime: released on 2026-04-08
-- `0.8.0` Usable CLI: planned
+- `0.8.0` Usable CLI: released on 2026-04-09
 
 ## Read First
 
@@ -113,6 +113,12 @@ Interactive CLI milestone benchmark:
 pnpm run benchmark:interactive-multi-turn
 ```
 
+Repository instruction visibility benchmark:
+
+```bash
+pnpm run benchmark:project-instructions
+```
+
 ## Current Scope
 
 Code Orb is currently best suited for:
@@ -122,7 +128,7 @@ Code Orb is currently best suited for:
 - interactive multi-turn iteration in one foreground session
 - session-aware follow-up work and repository-state inspection
 
-It is not yet a broadly capable general coding agent. The current runtime is still narrow in task interpretation and tool selection, and repository guidance such as `AGENTS.md` is not yet a fully modeled runtime instruction surface.
+It is not yet a broadly capable general coding agent. The current runtime is still narrow in task interpretation and tool selection, but repository-root `AGENTS.md` guidance is now loaded and surfaced during execution while the broader instruction model remains intentionally limited.
 
 ## Repository Layout
 
@@ -150,6 +156,7 @@ scripts/      Automation scripts that support development and release work.
 - `0.7.0` query loop and tool runtime milestone: [docs/roadmap/releases/0.7.0.md](./docs/roadmap/releases/0.7.0.md)
 - `0.7.0` execution checklist: [docs/roadmap/releases/0.7.0-checklist.md](./docs/roadmap/releases/0.7.0-checklist.md)
 - `0.8.0` usable CLI milestone: [docs/roadmap/releases/0.8.0.md](./docs/roadmap/releases/0.8.0.md)
+- `0.8.0` execution checklist: [docs/roadmap/releases/0.8.0-checklist.md](./docs/roadmap/releases/0.8.0-checklist.md)
 
 ## Working Style
 

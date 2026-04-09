@@ -14,6 +14,21 @@ describe("session artifact contract", () => {
       savedAt: "2026-04-06T00:01:01.000Z",
       outcome: "completed",
       summary: "Updated the implementation and verified the result.",
+      notes: ["Provider compatibility path: responses_streaming_fallback"],
+      projectInstructions: [
+        {
+          path: "AGENTS.md",
+          source: "repository",
+        },
+      ],
+      mutatingActions: [
+        {
+          toolName: "apply_patch",
+          status: "applied",
+          summary: "apply_patch changed src/index.ts.",
+          path: "src/index.ts",
+        },
+      ],
       changedFiles: ["src/index.ts"],
       validations: [
         {
@@ -29,6 +44,21 @@ describe("session artifact contract", () => {
           turnId: "turn_1",
           outcome: "completed",
           summary: "Updated the implementation and verified the result.",
+          notes: ["Provider compatibility path: responses_streaming_fallback"],
+          projectInstructions: [
+            {
+              path: "AGENTS.md",
+              source: "repository",
+            },
+          ],
+          mutatingActions: [
+            {
+              toolName: "apply_patch",
+              status: "applied",
+              summary: "apply_patch changed src/index.ts.",
+              path: "src/index.ts",
+            },
+          ],
           filesChanged: ["src/index.ts"],
           edits: [
             {
@@ -52,6 +82,14 @@ describe("session artifact contract", () => {
     const restored = JSON.parse(JSON.stringify(artifact)) as SessionArtifact;
 
     expect(restored.sessionId).toBe("ses_1");
+    expect(restored.projectInstructions).toEqual([
+      {
+        path: "AGENTS.md",
+        source: "repository",
+      },
+    ]);
+    expect(restored.notes).toEqual(["Provider compatibility path: responses_streaming_fallback"]);
+    expect(restored.mutatingActions?.[0]?.status).toBe("applied");
     expect(restored.changedFiles).toEqual(["src/index.ts"]);
     expect(restored.turnReports[0]?.edits?.[0]?.mode).toBe("targeted_replacement");
     expect(restored.turnReports[0]?.validations?.[0]?.status).toBe("passed");

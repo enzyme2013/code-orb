@@ -5,6 +5,7 @@ import type { GitWorkingTreeSnapshot } from "./session-artifact.js";
 export type ValidationStatus = "passed" | "failed" | "skipped";
 export type TurnOutcome = "completed" | "failed" | "blocked";
 export type SessionOutcome = "completed" | "failed" | "cancelled";
+export type MutatingActionStatus = "requested" | "approved" | "rejected" | "applied" | "completed" | "failed";
 export type TurnStopReason =
   | "model_completed"
   | "task_completed"
@@ -16,6 +17,19 @@ export type TurnStopReason =
   | "loop_limit_reached";
 export type AppliedEditMode = "generated_create" | "generated_rewrite" | "targeted_replacement";
 export type AppliedEditTargetSource = "task" | "assistant" | "inferred";
+
+export interface ProjectInstructionSource {
+  path: string;
+  source: "repository";
+}
+
+export interface MutatingActionReport {
+  toolName: string;
+  status: MutatingActionStatus;
+  summary: string;
+  path?: string;
+  command?: string;
+}
 
 export interface ValidationResult {
   name: string;
@@ -43,6 +57,9 @@ export interface TurnReport {
   edits?: AppliedEdit[];
   validations?: ValidationResult[];
   risks?: string[];
+  notes?: string[];
+  projectInstructions?: ProjectInstructionSource[];
+  mutatingActions?: MutatingActionReport[];
   nextSteps?: PlanItem[];
 }
 
@@ -71,5 +88,8 @@ export interface SessionReport {
   endedAt?: Timestamp;
   artifactPath?: string;
   followUpFromSessionId?: SessionId;
+  notes?: string[];
+  projectInstructions?: ProjectInstructionSource[];
+  mutatingActions?: MutatingActionReport[];
   repositoryState?: RepositoryStateReport;
 }

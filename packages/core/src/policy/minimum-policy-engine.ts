@@ -45,9 +45,38 @@ export class MinimumPolicyEngine implements PolicyEngine {
         turnId: request.turnId,
         stepId: request.stepId,
         toolCallId: request.id,
-        summary: `Approve ${request.toolName}`,
+        summary: buildApprovalSummary(request),
         scope: "once",
+        details: buildApprovalDetails(request),
       },
     };
   }
+}
+
+function buildApprovalSummary(request: ToolCallRequest): string {
+  if (request.toolName === "apply_patch") {
+    return `Approve apply_patch on ${String(request.input.path ?? "unknown path")}`;
+  }
+
+  if (request.toolName === "run_command") {
+    return `Approve run_command: ${String(request.input.command ?? "unknown command")}`;
+  }
+
+  return `Approve ${request.toolName}`;
+}
+
+function buildApprovalDetails(request: ToolCallRequest): Record<string, unknown> | undefined {
+  if (request.toolName === "apply_patch") {
+    return {
+      path: String(request.input.path ?? ""),
+    };
+  }
+
+  if (request.toolName === "run_command") {
+    return {
+      command: String(request.input.command ?? ""),
+    };
+  }
+
+  return undefined;
 }

@@ -4,7 +4,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { BasicToolExecutor, MemoryEventSink, StaticToolRegistry } from "../../../packages/core/src/index";
+import {
+  BasicToolExecutor,
+  MemoryEventSink,
+  MinimumPolicyEngine,
+  StaticToolRegistry,
+} from "../../../packages/core/src/index";
 
 import { AllowAllPolicyEngine, AutoApproveResolver } from "../../helpers/runtime-fakes";
 
@@ -229,6 +234,41 @@ describe("BasicToolExecutor", () => {
         mutability: "read_only",
         approvalRequirement: "auto",
       },
+    ]);
+  });
+
+  it("emits approval lifecycle events for mutating tools that require confirmation", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-tool-executor-"));
+    tempDirs.push(cwd);
+    const eventSink = new MemoryEventSink();
+
+    const executor = new BasicToolExecutor();
+    const outcome = await executor.execute(
+      {
+        id: "call_confirm",
+        sessionId: "ses_test",
+        turnId: "turn_test",
+        stepId: "step_test",
+        toolName: "run_command",
+        input: {
+          command: "node verify.mjs",
+        },
+        requestedAt: new Date().toISOString(),
+      },
+      {
+        cwd,
+        eventSink,
+        policyEngine: new MinimumPolicyEngine(),
+        approvalResolver: new AutoApproveResolver(),
+      },
+    );
+
+    expect(outcome.result.status).toBe("success");
+    expect(eventSink.events.map((event) => event.type)).toEqual([
+      "approval.requested",
+      "approval.completed",
+      "tool.started",
+      "tool.finished",
     ]);
   });
 });

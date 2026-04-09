@@ -77,8 +77,39 @@ export class BasicToolExecutor implements ToolExecutor {
     }
 
     let approvalResponse;
+    let approvalRequest;
     if (decision.type === "confirm" && decision.approvalRequest) {
-      approvalResponse = await context.approvalResolver.resolve(decision.approvalRequest);
+      approvalRequest = decision.approvalRequest;
+
+      context.eventSink.emit({
+        id: createRuntimeId("evt"),
+        sessionId: validatedRequest.sessionId,
+        turnId: validatedRequest.turnId,
+        stepId: validatedRequest.stepId,
+        type: "approval.requested",
+        timestamp: createTimestamp(),
+        payload: {
+          request: validatedRequest,
+          approvalRequest,
+        },
+      });
+
+      approvalResponse = await context.approvalResolver.resolve(approvalRequest);
+
+      context.eventSink.emit({
+        id: createRuntimeId("evt"),
+        sessionId: validatedRequest.sessionId,
+        turnId: validatedRequest.turnId,
+        stepId: validatedRequest.stepId,
+        type: "approval.completed",
+        timestamp: createTimestamp(),
+        payload: {
+          request: validatedRequest,
+          approvalRequest,
+          approvalResponse,
+        },
+      });
+
       if (approvalResponse.decision !== "approved") {
         const deniedDecision = {
           type: "deny" as const,
@@ -100,6 +131,7 @@ export class BasicToolExecutor implements ToolExecutor {
 
         return {
           decision: deniedDecision,
+          approvalRequest,
           approvalResponse,
           result: {
             callId: request.id,
@@ -156,6 +188,7 @@ export class BasicToolExecutor implements ToolExecutor {
 
       return {
         decision,
+        approvalRequest,
         approvalResponse,
         result,
       };
@@ -190,6 +223,7 @@ export class BasicToolExecutor implements ToolExecutor {
 
       return {
         decision,
+        approvalRequest,
         approvalResponse,
         result,
       };

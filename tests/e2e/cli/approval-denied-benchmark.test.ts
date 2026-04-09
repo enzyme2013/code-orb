@@ -63,9 +63,13 @@ describe("approval-denied benchmark", () => {
     expect(stderr).toEqual([]);
     expect(readme).toContain("__CODE_ORB_PLACEHOLDER__");
     expect(readme).not.toContain("Hello, Code Orb!");
+    expect(output).toContain("Approval requested: Approve apply_patch on README.md");
+    expect(output).toContain("Approval rejected: apply_patch");
     expect(output).toContain("Tool denied: apply_patch (approval rejected)");
     expect(output).toContain("Turn complete: apply_patch was blocked because approval was denied.");
     expect(output).toContain("Turn status: blocked");
+    expect(output).toContain("Mutation requested: apply_patch (README.md)");
+    expect(output).toContain("Mutation rejected: apply_patch (README.md)");
     expect(output).toContain("Session outcome: cancelled");
     expect(output).not.toContain("Verification started: node verify.mjs");
   });

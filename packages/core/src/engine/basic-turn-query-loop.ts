@@ -5,6 +5,7 @@ import type {
   ModelMessage,
   ModelResponse,
   ModelToolCall,
+  MutatingActionReport,
   StepKind,
   StepRuntimeState,
   ToolCallRequest,
@@ -20,6 +21,7 @@ import type {
 import { createRuntimeId, createTimestamp } from "../internal/runtime-utils.js";
 import type { SearchMatch } from "../tools/builtin-tool-helpers.js";
 import { loadPromptAsset } from "../prompts/prompt-loader.js";
+import { toProjectInstructionSources } from "../session/project-instructions.js";
 import type { OrchestratedToolResult } from "../tools/tool-orchestrator.js";
 import type { AgentExecutionContext } from "./agent-engine.js";
 import type { TurnQueryLoop } from "./turn-query-loop.js";
@@ -117,6 +119,8 @@ interface TurnLoopState {
   validations: ValidationResult[];
   filesChanged: Set<string>;
   risks: Set<string>;
+  notes: Set<string>;
+  mutatingActions: MutatingActionReport[];
   iterations: number;
 }
 
@@ -164,6 +168,9 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       edits: loop.edits.length > 0 ? loop.edits : undefined,
       validations: loop.validations.length > 0 ? loop.validations : undefined,
       risks,
+      notes: loop.notes.size > 0 ? [...loop.notes] : undefined,
+      projectInstructions: toProjectInstructionSources(context.projectInstructions),
+      mutatingActions: loop.mutatingActions.length > 0 ? loop.mutatingActions : undefined,
       nextSteps: planning.plan.items,
     };
   }
@@ -276,7 +283,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
                 type: "plan_only",
               };
 
-    return {
+    const loop: TurnLoopState = {
       intent,
       summary: planning.plan.summary,
       outcome: "completed",
@@ -284,8 +291,14 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       validations: [],
       filesChanged: new Set<string>(),
       risks: new Set<string>(),
+      notes: new Set<string>(),
+      mutatingActions: [],
       iterations: 0,
     };
+
+    recordCompatibilityNotes(loop, planning.response);
+
+    return loop;
   }
 
   private async generatePlan(
@@ -309,6 +322,13 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       messages.splice(messages.length - 1, 0, {
         role: "system",
         content: formatFollowUpContext(context.followUpContext),
+      });
+    }
+
+    if (context.projectInstructions && context.projectInstructions.length > 0) {
+      messages.splice(messages.length - 1, 0, {
+        role: "system",
+        content: formatProjectInstructionContext(context.projectInstructions),
       });
     }
 
@@ -356,7 +376,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       const inspectStep = await this.startStep(turn, "context", context);
       const searchResult = await this.executeTool(turn, inspectStep, context, "search_text", {
         query: intent.parsed.searchText,
-      });
+      }, loop);
 
       if (searchResult.disposition !== "success") {
         this.finishStep(turn, inspectStep.id, getStepStatusForToolDisposition(searchResult.disposition));
@@ -380,7 +400,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
 
       const readResult = await this.executeTool(turn, inspectStep, context, "read_file", {
         path: targetMatch.path,
-      });
+      }, loop);
 
       if (readResult.disposition !== "success") {
         this.finishStep(turn, inspectStep.id, getStepStatusForToolDisposition(readResult.disposition));
@@ -410,7 +430,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
         path: intent.targetMatch.path,
         searchText: intent.parsed.searchText,
         replaceText: intent.parsed.replaceText,
-      });
+      }, loop);
 
       if (editResult.disposition !== "success") {
         this.finishStep(turn, editStep.id, getStepStatusForToolDisposition(editResult.disposition));
@@ -445,6 +465,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       await this.startStep(turn, "verification", context),
       context,
       intent.parsed.verifyCommand ?? "node verify.mjs",
+      loop,
     );
 
     if (!verify.execution) {
@@ -483,7 +504,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
         path: intent.parsed.path,
         searchText: "",
         replaceText: intent.parsed.content,
-      });
+      }, loop);
 
       if (editResult.disposition !== "success") {
         this.finishStep(turn, editStep.id, getStepStatusForToolDisposition(editResult.disposition));
@@ -523,6 +544,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       await this.startStep(turn, "verification", context),
       context,
       intent.parsed.verifyCommand ?? "node verify.mjs",
+      loop,
     );
 
     if (!verify.execution) {
@@ -561,6 +583,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
         await this.startStep(turn, "verification", context),
         context,
         intent.parsed.verifyCommand,
+        loop,
       );
 
       if (!verify.execution) {
@@ -619,7 +642,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       }
 
       const contextStep = await this.startStep(turn, "context", context);
-      const listFiles = await this.executeTool(turn, contextStep, context, "list_files", {});
+      const listFiles = await this.executeTool(turn, contextStep, context, "list_files", {}, loop);
       if (listFiles.disposition !== "success") {
         this.finishStep(turn, contextStep.id, getStepStatusForToolDisposition(listFiles.disposition));
         this.stopForToolFailure(loop, "list_files", listFiles.canonical.result);
@@ -628,7 +651,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
 
       const testFile = await this.executeTool(turn, contextStep, context, "read_file", {
         path: intent.diagnosis.testPath,
-      });
+      }, loop);
       if (testFile.disposition !== "success") {
         this.finishStep(turn, contextStep.id, getStepStatusForToolDisposition(testFile.disposition));
         this.stopForToolFailure(loop, "read_file", testFile.canonical.result);
@@ -637,7 +660,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
 
       const sourceFile = await this.executeTool(turn, contextStep, context, "read_file", {
         path: intent.diagnosis.sourcePath,
-      });
+      }, loop);
       if (sourceFile.disposition !== "success") {
         this.finishStep(turn, contextStep.id, getStepStatusForToolDisposition(sourceFile.disposition));
         this.stopForToolFailure(loop, "read_file", sourceFile.canonical.result);
@@ -694,7 +717,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       path: intent.diagnosis.sourcePath,
       searchText: intent.proposedFix.searchText,
       replaceText: intent.proposedFix.replaceText,
-    });
+    }, loop);
 
     if (editResult.disposition !== "success") {
       this.finishStep(turn, editStep.id, getStepStatusForToolDisposition(editResult.disposition));
@@ -741,8 +764,14 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
 
     for (const toolCall of intent.pendingToolCalls) {
       const toolStep = await this.startStep(turn, "tool_use", context);
-      const toolResult = await this.executeTool(turn, toolStep, context, toolCall.name, toolCall.input);
+      const toolResult = await this.executeTool(turn, toolStep, context, toolCall.name, toolCall.input, loop);
       this.finishStep(turn, toolStep.id, getStepStatusForToolDisposition(toolResult.disposition));
+
+       if (toolResult.disposition !== "success") {
+        this.stopForToolFailure(loop, toolCall.name, toolResult.canonical.result);
+        return;
+      }
+
       this.recordModelToolSideEffect(turn, toolStep.id, context, loop, toolCall, toolResult.canonical.result);
       intent.messages.push(createToolResponseMessage(toolCall, toolResult));
     }
@@ -761,6 +790,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
 
     const modelStep = await this.startStep(turn, "model", context);
     const response = await this.requestModelResponse(turn, modelStep.id, context, intent.messages);
+    recordCompatibilityNotes(loop, response);
     this.completeStep(turn, modelStep.id);
     intent.messages.push(createAssistantResponseMessage(response));
     intent.modelIterations += 1;
@@ -793,6 +823,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
     context: AgentExecutionContext,
     toolName: string,
     input: Record<string, unknown>,
+    loop?: TurnLoopState,
   ): Promise<OrchestratedToolResult> {
     const request: ToolCallRequest = {
       id: createRuntimeId("call"),
@@ -806,12 +837,19 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
 
     step.toolCallIds.push(request.id);
 
-    return await context.toolOrchestrator.execute(request, {
+    const result = await context.toolOrchestrator.execute(request, {
       cwd: context.cwd,
       eventSink: context.eventSink,
       policyEngine: context.policyEngine,
       approvalResolver: context.approvalResolver,
     });
+
+    if (loop) {
+      recordToolNotes(loop, result);
+      recordMutatingActionLifecycle(loop, result);
+    }
+
+    return result;
   }
 
   private async runVerification(
@@ -819,6 +857,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
     step: StepRuntimeState,
     context: AgentExecutionContext,
     command: string,
+    loop?: TurnLoopState,
   ): Promise<{
     execution?: VerificationExecution;
     toolResult?: OrchestratedToolResult;
@@ -843,6 +882,7 @@ export class BasicTurnQueryLoop implements TurnQueryLoop {
       {
         command,
       },
+      loop,
     );
 
     if (verifyResult.disposition !== "success") {
@@ -1086,7 +1126,24 @@ function formatFollowUpContext(context: AgentExecutionContext["followUpContext"]
     `Prior changed files: ${context.priorChangedFiles.join(", ") || "none"}`,
     `Prior validations: ${context.priorValidations.map((validation) => `${validation.name}=${validation.status}`).join(", ") || "none"}`,
     `Prior risks: ${context.priorRisks.join(", ") || "none"}`,
+    `Prior notes: ${context.priorNotes?.join(", ") || "none"}`,
   ].join("\n");
+}
+
+function formatProjectInstructionContext(instructions: NonNullable<AgentExecutionContext["projectInstructions"]>): string {
+  return [
+    "Repository guidance is active for this run.",
+    "Treat the following project instructions as repository-specific operating rules unless they conflict with higher-priority system prompts.",
+    "",
+    ...instructions.flatMap((instruction) => [
+      `Source: ${instruction.path}`,
+      "",
+      instruction.content.trim(),
+      "",
+    ]),
+  ]
+    .join("\n")
+    .trim();
 }
 
 function parseReplaceAndVerifyTask(task: string): { searchText: string; replaceText: string; verifyCommand?: string } | null {
@@ -1321,6 +1378,24 @@ function classifyToolFailure(
     };
   }
 
+  if (result.error?.code === "unknown_tool") {
+    return {
+      summary: `${toolName} is not available in the current runtime.`,
+      reason: "the requested tool is not registered",
+      outcome: "failed",
+      risks: [`The runtime could not continue because ${toolName} is not a registered tool.`],
+    };
+  }
+
+  if (result.error?.code === "invalid_tool_input") {
+    return {
+      summary: `${toolName} received invalid input and could not continue.`,
+      reason: "the tool input was invalid",
+      outcome: "failed",
+      risks: [result.error.message],
+    };
+  }
+
   if (result.status === "error") {
     return {
       summary: `${toolName} failed before verification could continue.`,
@@ -1331,6 +1406,99 @@ function classifyToolFailure(
   }
 
   return null;
+}
+
+function recordCompatibilityNotes(loop: TurnLoopState, response: ModelResponse): void {
+  if (!response.compatibility || response.compatibility.status === "native") {
+    return;
+  }
+
+  loop.notes.add(`Provider compatibility path: ${response.compatibility.path}`);
+
+  for (const note of response.compatibility.notes ?? []) {
+    loop.notes.add(note);
+  }
+}
+
+function recordToolNotes(loop: TurnLoopState, result: OrchestratedToolResult): void {
+  const errorMessage = result.canonical.result.error?.message;
+
+  if (errorMessage && result.canonical.result.status !== "denied") {
+    loop.notes.add(errorMessage);
+  }
+}
+
+function recordMutatingActionLifecycle(loop: TurnLoopState, result: OrchestratedToolResult): void {
+  if (result.definition?.mutability !== "mutating") {
+    return;
+  }
+
+  const descriptor = describeMutatingAction(result.request);
+
+  if (result.approvalRequest) {
+    loop.mutatingActions.push({
+      ...descriptor,
+      status: "requested",
+      summary: result.approvalRequest.summary,
+    });
+  }
+
+  if (result.approvalRequest && result.approvalResponse?.decision === "approved") {
+    loop.mutatingActions.push({
+      ...descriptor,
+      status: "approved",
+      summary: `${result.request.toolName} was approved for execution.`,
+    });
+  }
+
+  if (
+    result.approvalRequest &&
+    result.approvalResponse?.decision === "rejected"
+  ) {
+    loop.mutatingActions.push({
+      ...descriptor,
+      status: "rejected",
+      summary: `${result.request.toolName} was rejected during approval.`,
+    });
+    return;
+  }
+
+  if (result.decision.type === "deny") {
+    loop.mutatingActions.push({
+      ...descriptor,
+      status: "rejected",
+      summary: `${result.request.toolName} was denied: ${result.decision.reason}.`,
+    });
+    return;
+  }
+
+  if (result.disposition === "success") {
+    loop.mutatingActions.push({
+      ...descriptor,
+      status: result.request.toolName === "apply_patch" ? "applied" : "completed",
+      summary:
+        result.request.toolName === "apply_patch"
+          ? `${result.request.toolName} changed ${descriptor.path ?? "the target file"}.`
+          : `${result.request.toolName} completed successfully.`,
+    });
+    return;
+  }
+
+  if (result.disposition !== "denied") {
+    loop.mutatingActions.push({
+      ...descriptor,
+      status: "failed",
+      summary: `${result.request.toolName} failed: ${result.canonical.result.error?.message ?? "unknown tool failure"}.`,
+    });
+  }
+}
+
+function describeMutatingAction(request: ToolCallRequest): Pick<MutatingActionReport, "toolName" | "path" | "command"> {
+  return {
+    toolName: request.toolName,
+    path: typeof request.input.path === "string" ? request.input.path : undefined,
+    command: typeof request.input.command === "string" ? request.input.command : undefined,
+  };
 }
 
 function inferGeneratedEditMode(result: ToolExecutionResult): AppliedEditMode {

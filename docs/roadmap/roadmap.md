@@ -128,9 +128,11 @@ Release detail: [releases/0.7.0.md](./releases/0.7.0.md)
 
 Current status:
 
-- planned
+- released on 2026-04-09
 
 Release detail: [releases/0.8.0.md](./releases/0.8.0.md)
+
+- checklist: [releases/0.8.0-checklist.md](./releases/0.8.0-checklist.md)
 
 ### 0.9.0 CLI UX And TUI
 

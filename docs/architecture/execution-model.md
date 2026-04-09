@@ -277,3 +277,19 @@ The `0.7.0` runtime now adds:
 - adapter-owned continuation behavior for provider-native tool calling, such as prior-response reuse and explicit tool-output handoff
 
 The remaining `0.7.0` closeout work is to make the `Session Engine` versus `Turn Query Loop` ownership model explicit enough that later CLI reliability work does not need to reopen it.
+
+## V0.8 Usability Baseline
+
+The initial `0.8.0` usability work makes repository guidance part of normal runtime execution instead of a shell-only convention.
+
+Specifically:
+
+- session start now discovers repository-root `AGENTS.md` by walking ancestor directories from the active `cwd`
+- discovered guidance is injected into the planning request as a runtime-owned system message, alongside existing base prompts and follow-up context
+- loaded instruction sources are surfaced in `session.started`, turn reports, session reports, and persisted session artifacts so users can tell when project guidance was active
+- mutating approval flow and mutating-action outcomes are surfaced in turn/session reporting instead of only transient terminal prompts
+- model-tool-loop turns now stop immediately on denied or failed tool execution outcomes instead of pretending the turn completed after a terminal runtime tool failure
+
+This keeps project-guidance handling inside the runtime input-processing boundary instead of hiding it in CLI-only prompt construction.
+
+The `0.8.0` closeout also hardens repository inspection by excluding `.orb/` session artifacts from normal repository search and listing helpers so saved local session history does not become an accidental edit target.

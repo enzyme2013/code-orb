@@ -271,6 +271,11 @@ function formatSessionDetail(session: StoredSessionArtifact): string {
     `Artifact: ${session.artifactPath}\n`,
     `Follow-up from: ${session.followUpFromSessionId ?? "none"}\n`,
     `Summary: ${session.summary}\n`,
+    ...(session.notes?.map((note) => `Note: ${note}\n`) ?? []),
+    ...(session.projectInstructions?.map((instruction) => `Project instructions: ${instruction.path}\n`) ?? []),
+    ...(session.mutatingActions?.map((action) =>
+      `Mutation ${action.status}: ${action.toolName}${action.path ? ` (${action.path})` : action.command ? ` (${action.command})` : ""}\n`,
+    ) ?? []),
     ...(session.changedFiles.length > 0 ? session.changedFiles.map((path) => `Changed: ${path}\n`) : ["Changed: none\n"]),
     ...(session.validations.length > 0
       ? session.validations.map((validation) => `Validation ${validation.status}: ${validation.name}\n`)
