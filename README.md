@@ -21,6 +21,7 @@ Release status:
 - `0.6.0` Extensibility: released on 2026-04-08
 - `0.7.0` Query Loop And Tool Runtime: released on 2026-04-08
 - `0.8.0` Usable CLI: released on 2026-04-09
+- `0.9.0` CLI UX And TUI: in progress as of 2026-04-09
 
 ## Read First
 
@@ -93,6 +94,7 @@ pnpm run cli:run -- sessions show <session-id>
 Interactive commands:
 
 - `/help`
+- `/history`
 - `/status`
 - `/exit`
 - `/quit`
@@ -157,6 +159,8 @@ scripts/      Automation scripts that support development and release work.
 - `0.7.0` execution checklist: [docs/roadmap/releases/0.7.0-checklist.md](./docs/roadmap/releases/0.7.0-checklist.md)
 - `0.8.0` usable CLI milestone: [docs/roadmap/releases/0.8.0.md](./docs/roadmap/releases/0.8.0.md)
 - `0.8.0` execution checklist: [docs/roadmap/releases/0.8.0-checklist.md](./docs/roadmap/releases/0.8.0-checklist.md)
+- `0.9.0` CLI UX and TUI milestone: [docs/roadmap/releases/0.9.0.md](./docs/roadmap/releases/0.9.0.md)
+- `0.9.0` execution checklist: [docs/roadmap/releases/0.9.0-checklist.md](./docs/roadmap/releases/0.9.0-checklist.md)
 
 ## Working Style
 

@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -190,20 +190,23 @@ describe("orb run command contract", () => {
   it("runs an interactive chat session with help, status, and exit", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "code-orb-cli-test-"));
     const { io, stdout, stderr, prompts, promptResponses } = createTestIO(cwd);
-    promptResponses.push("/help", "summarize the next action", "/status", "/exit");
+    promptResponses.push("/help", "summarize the next action", "/history", "/status", "/exit");
 
     try {
       const exitCode = await main(["chat"], io);
 
       expect(exitCode).toBe(0);
       expect(stderr).toEqual([]);
-      expect(prompts).toEqual(["orb> ", "orb> ", "orb> ", "orb> "]);
+      expect(prompts).toEqual(["orb> ", "orb> ", "orb> ", "orb> ", "orb> "]);
 
       const output = stdout.join("");
       expect(output).toContain("Interactive session started. Type /help for commands.");
       expect(output).toContain("Interactive commands:");
+      expect(output).toContain("/history Show prior turns in this session");
       expect(output).toContain("Turn 1: summarize the next action");
       expect(output).toContain("Assistant: Planned task: summarize the next action");
+      expect(output).toContain("Turn history:");
+      expect(output).toContain("- Turn 1 | completed | Planned task: summarize the next action");
       expect(output).toContain("Session:");
       expect(output).toContain("Mode: interactive");
       expect(output).toContain("Turns: 1");
@@ -518,8 +521,7 @@ describe("orb run command contract", () => {
       }
 
       const artifactPath = artifactLine.replace("Session artifact: ", "").trim();
-      const artifactSegments = artifactPath.split("/");
-      const sessionId = artifactSegments[artifactSegments.length - 1]?.replace(/\.json$/, "");
+      const sessionId = basename(artifactPath).replace(/\.json$/, "");
 
       if (!sessionId) {
         throw new Error("expected session id");
@@ -588,8 +590,7 @@ describe("orb run command contract", () => {
       }
 
       const artifactPath = artifactLine.replace("Session artifact: ", "").trim();
-      const artifactSegments = artifactPath.split("/");
-      const sessionId = artifactSegments[artifactSegments.length - 1]?.replace(/\.json$/, "");
+      const sessionId = basename(artifactPath).replace(/\.json$/, "");
 
       if (!sessionId) {
         throw new Error("expected session id");

@@ -1,6 +1,7 @@
 import type { ApprovalRequest, ApprovalResponse } from "@code-orb/schemas";
 
 import type { CliIO } from "../main.js";
+import { formatApprovalDetailLines } from "../rendering/terminal-formatting.js";
 
 export class CliApprovalResolver {
   constructor(private readonly io: CliIO) {}
@@ -17,7 +18,7 @@ export class CliApprovalResolver {
       };
     }
 
-    const approved = await confirm(`${request.summary}`);
+    const approved = await confirm(formatApprovalPrompt(request));
 
     return {
       requestId: request.id,
@@ -26,4 +27,13 @@ export class CliApprovalResolver {
       respondedAt: new Date().toISOString(),
     };
   }
+}
+
+export function formatApprovalPrompt(request: ApprovalRequest): string {
+  return [
+    "Approval request\n",
+    `Summary: ${request.summary}\n`,
+    ...formatApprovalDetailLines(request.details, request.scope),
+    "\nApprove request?",
+  ].join("");
 }

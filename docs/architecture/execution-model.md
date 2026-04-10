@@ -244,7 +244,7 @@ Specifically:
 
 - `orb chat` starts one foreground interactive session
 - each interactive user input creates a new turn in that session
-- `/help`, `/status`, and `/exit` are handled by the CLI shell layer as interactive control commands
+- `/help`, `/history`, `/status`, and `/exit` are handled by the CLI shell layer as interactive control commands
 - the session persists one final artifact containing all turn reports when the interactive session exits
 - same-session follow-up requests can reference the previous turn through session-scoped context instead of using `--from-session`
 - for explicit file-writing requests, the agent engine may translate assistant-generated code blocks into auditable repository writes through the tool executor instead of stopping at a conversational summary

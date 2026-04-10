@@ -171,6 +171,11 @@ async function runInteractiveSession(
         continue;
       }
 
+      if (input === "/history") {
+        io.stdout.write(formatInteractiveHistory(session));
+        continue;
+      }
+
       if (isExitCommand(input)) {
         io.stdout.write("Interactive session exiting.\n");
         break;
@@ -202,6 +207,7 @@ function formatInteractiveHelp(): string {
   return [
     "Interactive commands:\n",
     "/help   Show interactive help\n",
+    "/history Show prior turns in this session\n",
     "/status Show current session status\n",
     "/exit   Save the session and exit\n",
     "exit    Alias for /exit\n",
@@ -214,7 +220,8 @@ function isExitCommand(input: string): boolean {
 }
 
 function formatInteractiveStatus(session: SessionRuntimeState): string {
-  const lastTurn = session.turns.at(-1)?.report;
+  const lastTurnState = session.turns.at(-1);
+  const lastTurn = lastTurnState?.report;
 
   return [
     `Session: ${session.id}\n`,
@@ -223,6 +230,29 @@ function formatInteractiveStatus(session: SessionRuntimeState): string {
     `Status: ${session.status}\n`,
     `Task: ${session.task}\n`,
     `Last turn: ${lastTurn?.summary ?? "none"}\n`,
+    `Last turn status: ${lastTurnState?.status ?? "none"}\n`,
+    `Last stop reason: ${lastTurn?.stopReason ?? "n/a"}\n`,
+    ...(lastTurnState?.plan?.items.map((item) => `Plan ${item.status}: ${item.content}\n`) ?? []),
+    ...(lastTurn?.filesChanged?.map((path) => `Last changed: ${path}\n`) ?? []),
+    ...(lastTurn?.validations?.map((validation) => `Last validation ${validation.status}: ${validation.name}\n`) ?? []),
+  ].join("");
+}
+
+function formatInteractiveHistory(session: SessionRuntimeState): string {
+  if (session.turns.length === 0) {
+    return "Turn history: none\n";
+  }
+
+  return [
+    "Turn history:\n",
+    ...session.turns.flatMap((turn) => [
+      `- Turn ${turn.index + 1} | ${turn.report?.outcome ?? turn.status} | ${turn.report?.summary ?? turn.input.content}\n`,
+      turn.report?.stopReason ? `  Stop reason: ${turn.report.stopReason}\n` : "",
+      ...(turn.report?.filesChanged?.map((path) => `  Changed: ${path}\n`) ?? []),
+      ...(turn.report?.validations?.map(
+        (validation) => `  Validation ${validation.status}: ${validation.name}\n`,
+      ) ?? []),
+    ]),
   ].join("");
 }
 
@@ -254,7 +284,7 @@ function formatSessionList(sessions: StoredSessionArtifact[]): string {
     "Saved sessions:\n",
     ...sessions.map(
       (session) =>
-        `- ${session.sessionId} | ${session.outcome} | ${session.savedAt} | ${session.task.replace(/\s+/g, " ").trim()}\n`,
+        `- ${session.sessionId} | ${session.outcome} | turns=${session.turnReports.length} | ${session.savedAt} | ${session.task.replace(/\s+/g, " ").trim()}\n`,
     ),
   ].join("");
 }
@@ -265,6 +295,7 @@ function formatSessionDetail(session: StoredSessionArtifact): string {
     `Outcome: ${session.outcome}\n`,
     `Task: ${session.task}\n`,
     `Cwd: ${session.cwd}\n`,
+    `Turns: ${session.turnReports.length}\n`,
     `Started: ${session.startedAt}\n`,
     `Ended: ${session.endedAt ?? "n/a"}\n`,
     `Saved: ${session.savedAt}\n`,
@@ -281,8 +312,25 @@ function formatSessionDetail(session: StoredSessionArtifact): string {
       ? session.validations.map((validation) => `Validation ${validation.status}: ${validation.name}\n`)
       : ["Validations: none\n"]),
     ...(session.risks.length > 0 ? session.risks.map((risk) => `Risk: ${risk}\n`) : ["Risks: none\n"]),
+    ...formatTurnSummaries(session),
     ...formatSessionGitState(session),
   ].join("");
+}
+
+function formatTurnSummaries(session: StoredSessionArtifact): string[] {
+  if (session.turnReports.length === 0) {
+    return ["Stored turns: none\n"];
+  }
+
+  return session.turnReports.flatMap((turnReport, index) => [
+    `Turn ${index + 1} outcome: ${turnReport.outcome}\n`,
+    `Turn ${index + 1} summary: ${turnReport.summary}\n`,
+    turnReport.stopReason ? `Turn ${index + 1} stop reason: ${turnReport.stopReason}\n` : "",
+    ...(turnReport.filesChanged?.map((path) => `Turn ${index + 1} changed: ${path}\n`) ?? []),
+    ...(turnReport.validations?.map(
+      (validation) => `Turn ${index + 1} validation ${validation.status}: ${validation.name}\n`,
+    ) ?? []),
+  ]);
 }
 
 function formatSessionGitState(session: StoredSessionArtifact): string[] {

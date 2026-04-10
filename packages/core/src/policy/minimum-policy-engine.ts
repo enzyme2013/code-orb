@@ -67,8 +67,13 @@ function buildApprovalSummary(request: ToolCallRequest): string {
 
 function buildApprovalDetails(request: ToolCallRequest): Record<string, unknown> | undefined {
   if (request.toolName === "apply_patch") {
+    const searchText = String(request.input.searchText ?? "");
+
     return {
       path: String(request.input.path ?? ""),
+      operation: searchText.length > 0 ? "targeted_replacement" : "full_write",
+      searchText,
+      replaceText: String(request.input.replaceText ?? ""),
     };
   }
 

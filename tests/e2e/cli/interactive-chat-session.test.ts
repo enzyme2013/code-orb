@@ -53,6 +53,7 @@ describe("orb chat end-to-end", () => {
     const { io, stdout, stderr, prompts } = createInteractiveTestIO(tempRoot, [
       "/help",
       'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+      "/history",
       "/status",
       "continue the prior work",
       "/exit",
@@ -75,11 +76,14 @@ describe("orb chat end-to-end", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr).toEqual([]);
-    expect(prompts).toEqual(["orb> ", "orb> ", "orb> ", "orb> ", "orb> "]);
+    expect(prompts).toEqual(["orb> ", "orb> ", "orb> ", "orb> ", "orb> ", "orb> "]);
     expect(updatedReadme).toContain("Hello, Code Orb!");
     expect(output).toContain("Interactive session started. Type /help for commands.");
     expect(output).toContain("Interactive commands:");
+    expect(output).toContain("/history Show prior turns in this session");
     expect(output).toContain("Turn 1: Update README.md by replacing");
+    expect(output).toContain("Turn history:");
+    expect(output).toContain("- Turn 1 | completed | Updated README.md and ran verification");
     expect(output).toContain("Turn 2: continue the prior work");
     expect(output).toContain("Turns: 1");
     expect(output).toContain("Mode: interactive");

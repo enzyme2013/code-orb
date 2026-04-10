@@ -143,7 +143,7 @@ Release detail: [releases/0.8.0.md](./releases/0.8.0.md)
 
 Current status:
 
-- planned
+- in progress as of 2026-04-09
 
 Release detail: [releases/0.9.0.md](./releases/0.9.0.md)
 
