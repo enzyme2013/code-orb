@@ -419,6 +419,104 @@ describe("BasicSessionRunner", () => {
     }
   });
 
+  it("emits structured approval details that the shell can render for mutating review flows", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const runner = new BasicSessionRunner();
+
+    try {
+      await writeFile(join(cwd, "README.md"), "__CODE_ORB_PLACEHOLDER__\n", "utf8");
+      await writeFile(join(cwd, "verify.mjs"), "process.exit(0);\n", "utf8");
+
+      const report = await runner.run(
+        {
+          cwd,
+          task: 'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new MinimumPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new FakeModelClient("Create a short execution summary."),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore: new LocalSessionStore(),
+        },
+      );
+
+      expect(report.outcome).toBe("completed");
+
+      const approvalRequested = eventSink.events.find((event) => event.type === "approval.requested");
+      expect(approvalRequested?.type).toBe("approval.requested");
+      if (approvalRequested?.type === "approval.requested") {
+        expect(approvalRequested.payload.approvalRequest.details).toEqual({
+          path: "README.md",
+          operation: "targeted_replacement",
+          searchText: "__CODE_ORB_PLACEHOLDER__",
+          replaceText: "Hello, Code Orb!",
+        });
+      }
+
+      const commandApproval = eventSink.events.find(
+        (event) => event.type === "approval.requested" && event.payload.request.toolName === "run_command",
+      );
+      expect(commandApproval?.type).toBe("approval.requested");
+      if (commandApproval?.type === "approval.requested") {
+        expect(commandApproval.payload.approvalRequest.details).toEqual({
+          command: "node verify.mjs",
+        });
+      }
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("persists turn-level fields needed for post-hoc CLI inspection", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const sessionStore = new LocalSessionStore();
+    const runner = new BasicSessionRunner();
+
+    try {
+      await writeFile(join(cwd, "README.md"), "__CODE_ORB_PLACEHOLDER__\n", "utf8");
+      await writeFile(join(cwd, "verify.mjs"), "process.exit(0);\n", "utf8");
+
+      const report = await runner.run(
+        {
+          cwd,
+          task: 'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+        },
+        {
+          eventSink: new MemoryEventSink(),
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new MinimumPolicyEngine(),
+          approvalResolver: new AutoApproveResolver(),
+          modelClient: new FakeModelClient("Create a short execution summary."),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      const artifact = await sessionStore.load(cwd, report.sessionId);
+
+      expect(artifact?.turnReports[0]).toMatchObject({
+        outcome: "completed",
+        summary: "Updated README.md and ran verification",
+        stopReason: "task_completed",
+        filesChanged: ["README.md"],
+        validations: [
+          {
+            name: "node verify.mjs",
+            status: "passed",
+          },
+        ],
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("returns a failed turn report when an edit target cannot be applied", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
     const eventSink = new MemoryEventSink();

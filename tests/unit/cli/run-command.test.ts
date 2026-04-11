@@ -1,10 +1,11 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { main } from "../../../apps/cli/src/main";
+import { isDirectCliEntryPoint, main } from "../../../apps/cli/src/main";
 import { getCliUsage, parseCliArgs } from "../../../apps/cli/src/commands/run";
 
 function createTestIO(cwd = "/repo") {
@@ -165,6 +166,16 @@ describe("orb run command contract", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
+  });
+
+  it("recognizes the direct CLI entrypoint for Windows-style script paths", () => {
+    const windowsPath = "C:\\project\\code-orb\\apps\\cli\\src\\main.ts";
+
+    expect(isDirectCliEntryPoint(pathToFileURL(windowsPath).href, windowsPath)).toBe(true);
+  });
+
+  it("does not treat missing argv[1] as a direct CLI entrypoint", () => {
+    expect(isDirectCliEntryPoint("file:///C:/project/code-orb/apps/cli/src/main.ts", undefined)).toBe(false);
   });
 
   it("accepts the run command at the contract level", async () => {

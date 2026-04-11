@@ -49,6 +49,7 @@ describe("interactive-multi-turn benchmark", () => {
 
     const { io, stdout, stderr } = createInteractiveTestIO(tempRoot, [
       'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+      "/history",
       "continue the prior work",
       "/exit",
     ]);
@@ -71,6 +72,8 @@ describe("interactive-multi-turn benchmark", () => {
     expect(stderr).toEqual([]);
     expect(readme).toContain("Hello, Code Orb!");
     expect(output).toContain("Turn 1: Update README.md by replacing");
+    expect(output).toContain("Turn history:");
+    expect(output).toContain("- Turn 1 | completed | Updated README.md and ran verification");
     expect(output).toContain("Turn 2: continue the prior work");
     expect(output).toContain("Session outcome: completed");
     expect(sessionFiles.filter((entry) => entry.endsWith(".json"))).toHaveLength(1);

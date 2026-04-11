@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import { pathToFileURL } from "node:url";
 
 import { buildFollowUpContext } from "@code-orb/core";
 import type { SessionInput, SessionRuntimeState, TurnInput } from "@code-orb/schemas";
@@ -269,7 +270,15 @@ function getCommandCwd(parsed: ReturnType<typeof parseCliArgs>, fallbackCwd: str
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+export function isDirectCliEntryPoint(importMetaUrl: string, argv1: string | undefined): boolean {
+  if (!argv1) {
+    return false;
+  }
+
+  return importMetaUrl === pathToFileURL(argv1).href;
+}
+
+if (isDirectCliEntryPoint(import.meta.url, process.argv[1])) {
   void main().then((exitCode) => {
     process.exitCode = exitCode;
   });
