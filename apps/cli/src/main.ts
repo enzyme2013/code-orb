@@ -335,10 +335,26 @@ function formatTurnSummaries(session: StoredSessionArtifact): string[] {
     `Turn ${index + 1} outcome: ${turnReport.outcome}\n`,
     `Turn ${index + 1} summary: ${turnReport.summary}\n`,
     turnReport.stopReason ? `Turn ${index + 1} stop reason: ${turnReport.stopReason}\n` : "",
+    ...(turnReport.notes?.map((note) => `Turn ${index + 1} note: ${note}\n`) ?? []),
+    ...(turnReport.projectInstructions?.map(
+      (instruction) => `Turn ${index + 1} project instructions: ${instruction.path}\n`,
+    ) ?? []),
+    ...(turnReport.mutatingActions?.map(
+      (action) =>
+        `Turn ${index + 1} mutation ${action.status}: ${action.toolName}${formatMutationTarget(action)}\n`,
+    ) ?? []),
     ...(turnReport.filesChanged?.map((path) => `Turn ${index + 1} changed: ${path}\n`) ?? []),
+    ...(turnReport.edits?.map(
+      (edit) =>
+        `Turn ${index + 1} edit ${edit.mode}: ${edit.path}${edit.created ? " (created)" : ""}\n`,
+    ) ?? []),
     ...(turnReport.validations?.map(
       (validation) => `Turn ${index + 1} validation ${validation.status}: ${validation.name}\n`,
     ) ?? []),
+    ...(turnReport.nextSteps?.map(
+      (item) => `Turn ${index + 1} next step ${item.status}: ${item.content}\n`,
+    ) ?? []),
+    ...(turnReport.risks?.map((risk) => `Turn ${index + 1} risk: ${risk}\n`) ?? []),
   ]);
 }
 
@@ -356,4 +372,16 @@ function formatSessionGitState(session: StoredSessionArtifact): string[] {
     ...(session.changeClassification?.currentRunChangedFiles.map((path) => `Current-run change: ${path}\n`) ?? []),
     ...(session.changeClassification?.touchedPreExistingFiles.map((path) => `Touched pre-existing file: ${path}\n`) ?? []),
   ];
+}
+
+function formatMutationTarget(action: { path?: string; command?: string }): string {
+  if (action.path) {
+    return ` (${action.path})`;
+  }
+
+  if (action.command) {
+    return ` (${action.command})`;
+  }
+
+  return "";
 }

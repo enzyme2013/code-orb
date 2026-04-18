@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { main } from "../../../apps/cli/src/main";
 
-function createInteractiveTestIO(cwd: string, responses: Array<string | null>) {
+function createInteractiveTestIO(cwd: string, responses: Array<string | null>, confirmDecision = true) {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const prompts: string[] = [];
@@ -24,7 +24,7 @@ function createInteractiveTestIO(cwd: string, responses: Array<string | null>) {
         },
       },
       cwd: () => cwd,
-      confirm: async () => true,
+      confirm: async () => confirmDecision,
       prompt: async (message: string) => {
         prompts.push(message);
         return responses.shift() ?? null;
@@ -91,5 +91,43 @@ describe("orb chat end-to-end", () => {
     expect(output).toContain("Session outcome: completed");
     expect(sessionFiles.filter((entry) => entry.endsWith(".json"))).toHaveLength(1);
     expect(artifact.turnReports).toHaveLength(2);
+  });
+
+  it("keeps inspection commands usable after an approval-rejected interactive turn", async () => {
+    const fixtureRoot = resolve("benchmarks/approval-denied/repo");
+    const tempRoot = await mkdtemp(join(tmpdir(), "code-orb-chat-fixture-"));
+    tempDirs.push(tempRoot);
+
+    await cp(fixtureRoot, tempRoot, { recursive: true });
+
+    const { io, stdout, stderr, prompts } = createInteractiveTestIO(
+      tempRoot,
+      [
+        'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+        "/history",
+        "/status",
+        "/exit",
+      ],
+      false,
+    );
+
+    const exitCode = await main(["chat"], io);
+
+    const output = stdout.join("");
+    const sessionFiles = await readdir(join(tempRoot, ".orb", "sessions"));
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    expect(prompts).toEqual(["orb> ", "orb> ", "orb> ", "orb> "]);
+    expect(output).toContain("Approval requested: Approve apply_patch on README.md");
+    expect(output).toContain("Approval rejected: apply_patch");
+    expect(output).toContain("Turn status: blocked");
+    expect(output).toContain("Turn history:");
+    expect(output).toContain("- Turn 1 | blocked | apply_patch was blocked because approval was denied.");
+    expect(output).toContain("Stop reason: tool_denied");
+    expect(output).toContain("Last turn status: blocked");
+    expect(output).toContain("Last stop reason: tool_denied");
+    expect(output).toContain("Session outcome: cancelled");
+    expect(sessionFiles.filter((entry) => entry.endsWith(".json"))).toHaveLength(1);
   });
 });

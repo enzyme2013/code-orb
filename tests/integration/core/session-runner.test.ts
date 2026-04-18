@@ -106,6 +106,22 @@ class MissingToolModelClient implements ModelClient {
   }
 }
 
+class RejectingApprovalResolver {
+  async resolve(request: { id: string; scope: "once" | "session" | "workspace" }): Promise<{
+    requestId: string;
+    decision: "rejected";
+    scope: "once" | "session" | "workspace";
+    respondedAt: string;
+  }> {
+    return {
+      requestId: request.id,
+      decision: "rejected",
+      scope: request.scope,
+      respondedAt: new Date().toISOString(),
+    };
+  }
+}
+
 describe("BasicSessionRunner", () => {
   it("runs a minimal session-turn-step flow and emits runtime events", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
@@ -512,6 +528,67 @@ describe("BasicSessionRunner", () => {
           },
         ],
       });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("persists blocked turn details when approval is rejected before a mutating edit", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "code-orb-session-runner-"));
+    const eventSink = new MemoryEventSink();
+    const sessionStore = new LocalSessionStore();
+    const runner = new BasicSessionRunner();
+
+    try {
+      await writeFile(join(cwd, "README.md"), "__CODE_ORB_PLACEHOLDER__\n", "utf8");
+      await writeFile(join(cwd, "verify.mjs"), "process.exit(0);\n", "utf8");
+
+      const report = await runner.run(
+        {
+          cwd,
+          task: 'Update README.md by replacing "__CODE_ORB_PLACEHOLDER__" with "Hello, Code Orb!" and then run node verify.mjs',
+        },
+        {
+          eventSink,
+          agentEngine: new BasicAgentEngine(),
+          toolExecutor: new BasicToolExecutor(),
+          policyEngine: new MinimumPolicyEngine(),
+          approvalResolver: new RejectingApprovalResolver(),
+          modelClient: new FakeModelClient("Create a short execution summary."),
+          gitStateReader: new LocalGitStateReader(),
+          sessionStore,
+        },
+      );
+
+      expect(report.outcome).toBe("cancelled");
+      expect(report.turnReports[0]?.outcome).toBe("blocked");
+      expect(report.turnReports[0]?.stopReason).toBe("tool_denied");
+      expect(report.turnReports[0]?.mutatingActions).toEqual([
+        {
+          toolName: "apply_patch",
+          status: "requested",
+          summary: "Approve apply_patch on README.md",
+          path: "README.md",
+        },
+        {
+          toolName: "apply_patch",
+          status: "rejected",
+          summary: "apply_patch was rejected during approval.",
+          path: "README.md",
+        },
+      ]);
+      expect(report.turnReports[0]?.risks).toEqual(["Mutating edit was blocked by approval denial."]);
+
+      const artifact = await sessionStore.load(cwd, report.sessionId);
+      expect(artifact?.outcome).toBe("cancelled");
+      expect(artifact?.turnReports[0]?.outcome).toBe("blocked");
+      expect(artifact?.turnReports[0]?.stopReason).toBe("tool_denied");
+      expect(artifact?.turnReports[0]?.mutatingActions).toEqual(report.turnReports[0]?.mutatingActions);
+      expect(artifact?.turnReports[0]?.risks).toEqual(["Mutating edit was blocked by approval denial."]);
+
+      expect(eventSink.events.map((event) => event.type)).toContain("approval.requested");
+      expect(eventSink.events.map((event) => event.type)).toContain("approval.completed");
+      expect(eventSink.events.map((event) => event.type)).toContain("tool.denied");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
